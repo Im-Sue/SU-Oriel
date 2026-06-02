@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import type { PrismaClient, Requirement } from "@prisma/client";
 
 import { parseDocument, parseRequirementSections } from "../../indexer/document-parser.js";
-import { getDocsStructureResolver } from "../../indexer/docs-structure-resolver.js";
+import { getDocsStructureResolverForProject } from "../../indexer/docs-structure-resolver.js";
 import { syncRequirementsFromMarkdown } from "../../indexer/project-indexer.js";
 import { primitiveExecutor } from "../primitive/primitive-wrapper.js";
 import { hashRequirementAnalysisInput } from "./requirement-analysis-hash.js";
@@ -70,7 +70,7 @@ async function collectMarkdownFiles(rootPath: string): Promise<string[]> {
 }
 
 export async function findRequirementMarkdown(projectRoot: string, requirementId: string): Promise<RequirementMarkdownRecord> {
-  const requirementDirectory = getDocsStructureResolver().resolveDocType("requirement").directory;
+  const requirementDirectory = getDocsStructureResolverForProject(projectRoot).resolveDocType("requirement").directory;
   const root = join(projectRoot, requirementDirectory);
   let files: string[];
   try {
