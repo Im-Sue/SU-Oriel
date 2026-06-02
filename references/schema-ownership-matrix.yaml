@@ -1,0 +1,1323 @@
+# =============================================================================
+# Entity-Field Ownership Matrix · ADR-0026 v1.0
+# =============================================================================
+# Authority: Prisma field ownership baseline for schema-ownership lint.
+# Source taxonomy: plugin-canonical / console-projection / console-internal / append-only-audit.
+# =============================================================================
+
+schema_version: schema-ownership-matrix-v1
+
+owner_categories:
+  plugin-canonical:
+    sources: [dev-task, requirement-md, breakdown-draft]
+  console-projection:
+    sources: [indexer]
+  console-internal:
+    sources: [operator]
+  append-only-audit:
+    sources: [eventjournal]
+
+sync_directions: [none, file_to_db, append_only]
+
+entities:
+  - entity: AiCliSetting
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: scope
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: toolId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: command
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: extraArgs
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: defaultMode
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: AnchorAllocation
+    fields:
+      - field: anchorId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: anchorPath
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: socketPath
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: runtimePaused
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: subjectType
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: subjectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: subjectKey
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: mode
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: state
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: dirtyState
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: startedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: heartbeatAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: AnchorDispatchQueue
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: jobId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: anchorId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: subjectType
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: subjectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: command
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: queuedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: submittedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: failedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: errorMessage
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: readinessWarning
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: CapabilityStatus
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: version
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: name
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: bindingSource
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lastUsedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: ConsultRequest
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskKey
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: nodeId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: message
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: targetAgent
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: consultRound
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: consumedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: Document
+    fields:
+      - field: id
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: projectId
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: taskKey
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: path
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: kind
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: title
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: status
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: frontmatterJson
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: summary
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: contentHash
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: mtime
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: parseStatus
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: parseError
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: createdBy
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: updatedBy
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: createdAt
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: updatedAt
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+  - entity: EventJournal
+    fields:
+      - field: id
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: eventId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: eventType
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: projectId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: subjectType
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: subjectId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: subjectKey
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: anchorId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: payloadJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: emittedAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: sourceActor
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: sourceComponent
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: causationId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: correlationId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: stateRevisionSeen
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: idempotencyKey
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: createdAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: updatedAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+  - entity: ExecutorProfile
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: name
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: provider
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: model
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: runtime
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: permission
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: capabilityBindingJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: version
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: metaJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: HookAuditLog
+    fields:
+      - field: id
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: hookName
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: triggeredAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: payloadSnapshotJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: outcomeJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: createdAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+  - entity: NodeRun
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: version
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: nodeId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: enteredAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: exitedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: transitionsJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: capabilityDecisionsJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: mutationSourcesJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: PrimitiveAudit
+    fields:
+      - field: id
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: primitive
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: mutationType
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: idempotencyKey
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: status
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: resultJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: errorJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: startedAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: completedAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: durationMs
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+  - entity: Project
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: name
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: localPath
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: summary
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: initStatus
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: docsRoot
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lastScanAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: syncStatus
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: ownerUserId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: ProjectSettings
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: scanStrategyJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: parsingRulesJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: pathConfigJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: Requirement
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: title
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: description
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: status
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: source
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: verbatimSource
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: claudeInterpretation
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: ambiguities
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: fidelityDiff
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: analysisInputHash
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: analysisStaleAt
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: currentPlanningNode
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: currentPlanningStep
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: planningSubstate
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: planningRuntimeState
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: lastPlanningTransitionId
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: planDocPath
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: breakdownDraftPath
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+      - field: planningAnchorId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: rollupProgress
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+        write_entries: [requirement-status-rollup]
+      - field: rollupStatus
+        owner: plugin-canonical
+        source: requirement-md
+        sync: file_to_db
+        write_entries: [requirement-status-rollup]
+      - field: createdBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: RequirementEditAudit
+    fields:
+      - field: id
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: projectId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: requirementId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: editor
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: changeReason
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: beforeTitle
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: afterTitle
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: beforeDescription
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: afterDescription
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: beforeMdHash
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: afterMdHash
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: diffJson
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: createdAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+  - entity: ReviewIntent
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskKey
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: intentType
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: payloadJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: actor
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: consumedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: consumedBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: attemptCount
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lastError
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lastAttemptAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: RoleProfile
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: name
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: executorProfileId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: promptTemplateRef
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: variableOverridesJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: version
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: Sprint
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: name
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: goal
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: startDate
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: endDate
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: capacity
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: burndownDataJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: SyncJob
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: jobType
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: startedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: finishedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: logSummary
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: errorMessage
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: Task
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskKey
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: title
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: summary
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: status
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: currentNode
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: nodeSubstate
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: runtimeState
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: lastTransitionId
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: ownerUserId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: assigneeUserId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: reviewerUserId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedBy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: priority
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: progress
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: primaryDocumentId
+        owner: console-projection
+        source: indexer
+        sync: file_to_db
+      - field: blockedReason
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: requirementId
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: reviewStatus
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: verificationResultJson
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: reviewFollowupJson
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: specSectionId
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: implementationOwner
+        owner: plugin-canonical
+        source: dev-task
+        sync: file_to_db
+      - field: sprintId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: storyPoints
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: TaskCheckpoint
+    fields:
+      - field: id
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: taskId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: taskKey
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: transitionId
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: nodeBefore
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: nodeAfter
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: stateRevisionAfter
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: stateHash
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: snapshotInline
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: snapshotPath
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+      - field: createdAt
+        owner: append-only-audit
+        source: eventjournal
+        sync: append_only
+  - entity: TaskRun
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: attemptN
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: dispatchedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: completedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: errorSummary
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: transitionsJson
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: workspacePath
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: worktreeBranch
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: TaskWorkspace
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: projectId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lockedByRunId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskKey
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: baseRef
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: branchName
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: workspacePath
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: status
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lockMode
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: cleanupPolicy
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: cleanupAfter
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: lastVerifiedAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: errorMessage
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: updatedAt
+        owner: console-internal
+        source: operator
+        sync: none
+  - entity: UserIntent
+    fields:
+      - field: id
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: taskId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: ccbJobId
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: intentType
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: body
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: createdAt
+        owner: console-internal
+        source: operator
+        sync: none
+      - field: consumedAt
+        owner: console-internal
+        source: operator
+        sync: none
+
+allowed_write_entries:
+  - createRequirementMdFirst
+  - PATCH /api/projects/:projectId/requirements/:requirementId
+  - requirement.edit primitive
+  - requirement.reanalyze primitive
+  - requirement.reanalyzeApplied primitive
+  - generateTaskFromRequirement
+  - requirement-status-rollup
+  - task.routes primitive
+  - transition-consumption primitive
+  - breakdown-draft legacy projection
+  - materialize.service primitive
+  - epic-status-rollup primitive
+  - primitive-audit internal
+  - state-projection refresh
+  - scanProject create-only
+  - scanProject syncRequirementsFromMarkdown
+  - projection-outbox-worker
+
+schema_definition:
+  fields:
+    field: string
+    owner: enum[plugin-canonical, console-projection, console-internal, append-only-audit]
+    source: enum[dev-task, requirement-md, breakdown-draft, indexer, operator, eventjournal]
+    sync: enum[none, file_to_db, append_only]
+    write_entries: list[string]

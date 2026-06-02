@@ -1,0 +1,96 @@
+.sidebar {
+  position: sticky;
+  top: var(--space-4);
+  align-self: start;
+  width: 100%;
+  max-height: calc(100vh - var(--space-8) * 2);
+}
+
+.scrollArea {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: inherit;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.card {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: default;
+  user-select: none;
+}
+
+details.card > .cardHeader {
+  cursor: pointer;
+}
+
+details.card > .cardHeader::-webkit-details-marker {
+  display: none;
+}
+
+details.card > .cardHeader::after {
+  content: "▾";
+  font-size: 10px;
+  color: var(--gray-500);
+  margin-left: auto;
+  transition: transform 120ms;
+}
+
+details.card[open] > .cardHeader::after {
+  transform: rotate(180deg);
+}
+
+.cardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cardIcon {
+  font-size: 14px;
+}
+
+.cardBadge {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+.cardBody {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    position: static;
+    max-height: none;
+  }
+  .scrollArea {
+    max-height: none;
+    overflow: visible;
+  }
+}

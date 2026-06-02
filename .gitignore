@@ -1,0 +1,66 @@
+node_modules/
+**/node_modules/
+dist/
+.turbo/
+.DS_Store
+coverage/
+build/
+*.tsbuildinfo
+.eslintcache
+
+# ===== server 构建 / 数据 / DB =====
+server/dist/
+server/coverage/
+server/dev.db
+server/dev.db-journal
+server/data/
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/prisma/dev.db-shm
+server/prisma/dev.db-wal
+server/prisma/dev.db.backup-*
+server/prisma/dev.db.bak-*
+server/prisma/test.db
+server/prisma/test.db-journal
+server/prisma/test.db-shm
+server/prisma/test.db-wal
+server/prisma/prisma/dev.db
+server/prisma/migrations/dev/
+server/scripts/migrate-task-hierarchy-dryrun-*.csv
+
+# ===== web 构建 =====
+web/dist/
+web/.vite/
+web/.test-dist/
+**/.test-dist/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== pnpm =====
+.pnpm-store/
+
+# ===== env / 密钥 =====
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ===== 日志 =====
+*.log
+logs/
+pnpm-debug.log*
+
+# ===== IDE / OS =====
+.idea/
+.vscode/
+!.vscode/settings.json
+*.swp
+*.swo
+Thumbs.db
+desktop.ini

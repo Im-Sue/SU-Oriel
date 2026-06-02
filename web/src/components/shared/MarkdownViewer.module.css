@@ -1,0 +1,63 @@
+.viewer {
+  color: var(--gray-800);
+  line-height: 1.7;
+}
+
+.viewer :global(h1),
+.viewer :global(h2),
+.viewer :global(h3),
+.viewer :global(h4) {
+  margin: 16px 0 8px;
+  color: var(--gray-900);
+  line-height: 1.3;
+}
+
+.viewer :global(h1):first-child,
+.viewer :global(h2):first-child,
+.viewer :global(h3):first-child {
+  margin-top: 0;
+}
+
+.viewer :global(h1) {
+  font-size: var(--text-2xl, 22px);
+  font-weight: 700;
+}
+
+.viewer :global(h2) {
+  font-size: var(--text-xl);
+}
+
+.viewer :global(p),
+.viewer :global(ul),
+.viewer :global(ol),
+.viewer :global(pre) {
+  margin: 0 0 12px;
+}
+
+.viewer :global(li) {
+  margin: 4px 0;
+}
+
+.viewer :global(pre) {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--gray-900);
+  padding: 14px;
+  color: #ffffff;
+}
+
+.viewer :global(code) {
+  font-family: var(--font-mono);
+}
+
+.viewer :global(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.viewer :global(th),
+.viewer :global(td) {
+  border: 1px solid var(--gray-200);
+  padding: 8px 10px;
+  text-align: left;
+}

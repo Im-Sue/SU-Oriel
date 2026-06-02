@@ -1,0 +1,23 @@
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 320px;
+  margin: 48px auto;
+  text-align: center;
+}
+
+.icon {
+  font-size: 40px;
+}
+
+.title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.description {
+  color: var(--gray-500);
+  line-height: 1.6;
+}

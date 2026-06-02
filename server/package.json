@@ -1,0 +1,47 @@
+{
+  "name": "su-oriel-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "generate:validators": "node ../../su-ccb-claude-plugin/scripts/generate-schema-validators.mjs --console-out-dir src/generated",
+    "generate:capability-policy": "node ../../su-ccb-claude-plugin/scripts/generate-capability-outcome-policy.mjs --console-out src/generated/capability-outcome-policy.ts",
+    "generate:all": "pnpm run generate:validators && pnpm run generate:capability-policy",
+    "check:generated-drift": "pnpm run generate:all && git -C .. diff --exit-code -- server/src/generated",
+    "build": "pnpm run prisma:generate && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "lint:main-anchor-config": "python3 ./scripts/lint_main_anchor_config.py",
+    "lint:schema-ownership": "tsx scripts/lint-schema-ownership.ts",
+    "tsx": "tsx",
+    "test": "pnpm run lint:main-anchor-config && pnpm run db:prepare && pnpm run prisma:generate && vitest run --pool=forks --poolOptions.forks.singleFork",
+    "test:coverage": "pnpm run db:prepare && pnpm run prisma:generate && vitest run --coverage",
+    "postinstall": "node ./scripts/rebuild-node-pty-linux.cjs",
+    "db:prepare": "rm -f prisma/dev.db prisma/dev.db-shm prisma/dev.db-wal prisma/test.db prisma/test.db-shm prisma/test.db-wal && DATABASE_URL=file:$(pwd)/prisma/dev.db pnpm prisma db push --schema prisma/schema.prisma --skip-generate --force-reset --accept-data-loss && DATABASE_URL=file:$(pwd)/prisma/test.db pnpm prisma db push --schema prisma/schema.prisma --skip-generate --force-reset --accept-data-loss",
+    "db:rehydrate": "tsx scripts/db-rehydrate.ts",
+    "cleanup:requirement-assets": "tsx scripts/cleanup-requirement-assets.ts",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema prisma/schema.prisma --accept-data-loss"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.1",
+    "@fastify/multipart": "^10.0.0",
+    "@fastify/websocket": "^11.2.0",
+    "@prisma/client": "^6.19.2",
+    "chokidar": "^4.0.3",
+    "fastify": "^5.2.1",
+    "node-pty": "^1.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@vitest/coverage-v8": "3.2.4",
+    "prisma": "^6.19.2",
+    "ts-morph": "^28.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2"
+  }
+}

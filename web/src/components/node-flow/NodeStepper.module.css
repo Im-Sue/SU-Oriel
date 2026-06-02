@@ -1,0 +1,108 @@
+.root {
+  border: 1px solid var(--cc-color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-bg-surface);
+  padding: var(--cc-space-4);
+}
+
+.sm {
+  font-size: var(--cc-text-size-xs);
+}
+
+.md {
+  font-size: var(--cc-text-size-sm);
+}
+
+.lg {
+  font-size: var(--cc-text-size-base);
+}
+
+.default {
+  border-color: var(--cc-color-border-subtle);
+}
+
+.success {
+  border-color: var(--cc-node-stepper-active);
+}
+
+.warn {
+  border-color: var(--cc-trace-event-warn);
+}
+
+.danger {
+  border-color: var(--cc-node-stepper-blocked);
+}
+
+.stepper {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 140px;
+}
+
+.connector {
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.connectorActive {
+  stroke: var(--cc-trace-rail-active);
+}
+
+.connectorPending {
+  stroke: var(--cc-trace-rail-color);
+}
+
+.connectorBlocked {
+  stroke: var(--cc-node-stepper-blocked);
+}
+
+.node {
+  outline: none;
+}
+
+.node:focus-visible .marker {
+  stroke: var(--cc-color-accent-focus);
+  stroke-width: 3;
+}
+
+.marker {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.currentNode .marker,
+.completeNode .marker {
+  fill: var(--cc-node-stepper-active);
+}
+
+.pendingNode .marker {
+  fill: var(--cc-node-stepper-pending);
+}
+
+.indexLabel {
+  fill: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.nodeLabel {
+  fill: var(--cc-color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.currentNode .nodeLabel {
+  fill: var(--cc-color-text-primary);
+  font-weight: 700;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cc-space-2);
+  color: var(--cc-color-text-muted);
+  font-size: var(--cc-text-size-xs);
+}

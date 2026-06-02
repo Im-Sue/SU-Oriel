@@ -1,0 +1,222 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { beforeEach, test, vi } from "vitest";
+
+import { prisma } from "../../db/prisma.js";
+import { AnchorSocketNotReadyError } from "./anchor-broker.errors.js";
+import { runAnchorDispatchWorkerTick } from "./anchor-dispatch-worker.js";
+
+async function resetFixtures(): Promise<void> {
+  await prisma.anchorDispatchQueue.deleteMany();
+  await prisma.eventJournal.deleteMany();
+  await prisma.anchorAllocation.deleteMany();
+  await prisma.task.deleteMany();
+  await prisma.requirement.deleteMany();
+  await prisma.project.deleteMany();
+}
+
+async function createRequirementQueueFixture() {
+  const suffix = randomUUID();
+  const project = await prisma.project.create({
+    data: {
+      name: `dispatch-worker-requirement-${suffix}`,
+      localPath: join(tmpdir(), `ccb-dispatch-worker-requirement-${suffix}`)
+    }
+  });
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Requirement dispatch worker",
+      description: "Plan this requirement",
+      status: "planning"
+    }
+  });
+  const anchorPath = join(project.localPath, `requirement-${requirement.id}`);
+  const anchor = await prisma.anchorAllocation.create({
+    data: {
+      anchorId: "anchor_dispatch_worker_requirement",
+      anchorPath,
+      projectId: project.id,
+      socketPath: "/tmp/worker-requirement.sock",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      subjectKey: requirement.title,
+      mode: "planning",
+      state: "ready"
+    }
+  });
+  const queue = await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job_worker_req",
+      anchorId: anchor.anchorId,
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: `/ccb:su-flow --payload ${JSON.stringify({
+        language: "中文",
+        project_id: project.id,
+        requirement_id: requirement.id,
+        step: "design",
+        subject: "requirement"
+      })}`,
+      status: "pending"
+    }
+  });
+  return { project, requirement, anchor, queue };
+}
+
+async function createSubtaskQueueFixture() {
+  const suffix = randomUUID();
+  const project = await prisma.project.create({
+    data: {
+      name: `dispatch-worker-subtask-${suffix}`,
+      localPath: join(tmpdir(), `ccb-dispatch-worker-subtask-${suffix}`)
+    }
+  });
+  const task = await prisma.task.create({
+    data: {
+      projectId: project.id,
+      taskKey: `task-${suffix}`,
+      title: "Subtask dispatch worker",
+      status: "reviewing",
+      currentNode: "implementation"
+    }
+  });
+  const anchorPath = join(project.localPath, `task-${task.id}`);
+  const anchor = await prisma.anchorAllocation.create({
+    data: {
+      anchorId: "anchor_dispatch_worker_subtask",
+      anchorPath,
+      projectId: project.id,
+      socketPath: "/tmp/worker-subtask.sock",
+      subjectType: "subtask",
+      subjectId: task.id,
+      subjectKey: task.taskKey,
+      mode: "execution",
+      state: "ready"
+    }
+  });
+  const queue = await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job_worker_subtask",
+      anchorId: anchor.anchorId,
+      subjectType: "subtask",
+      subjectId: task.id,
+      command: `/ccb:su-dispatch --payload ${JSON.stringify({
+        language: "中文",
+        subject: "subtask",
+        task_id: task.id,
+        task_key: task.taskKey
+      })}`,
+      status: "pending"
+    }
+  });
+  return { project, task, anchor, queue };
+}
+
+beforeEach(async () => {
+  await resetFixtures();
+});
+
+test("runAnchorDispatchWorkerTick submits pending requirement dispatches and emits submitted event", async () => {
+  const { requirement, anchor, queue } = await createRequirementQueueFixture();
+  const askAcrossAnchor = vi.fn(async () => ({ jobId: "ccbd_job_1", traceRef: "trace-1" }));
+  const waitForClaudeTuiReady = vi.fn(async () => ({
+    ready: true,
+    elapsedMs: 5,
+    lastTitles: ["✳ Analyze customer requirement"]
+  }));
+
+  const result = await runAnchorDispatchWorkerTick({
+    prismaClient: prisma,
+    askRouter: { askAcrossAnchor },
+    waitForClaudeTuiReady
+  });
+
+  assert.deepEqual(result, { count: 1, submitted: 1, failed: 0 });
+  assert.deepEqual(waitForClaudeTuiReady.mock.calls[0], [anchor.anchorPath]);
+  assert.deepEqual(askAcrossAnchor.mock.calls[0]?.[0], {
+    targetAnchorId: anchor.anchorId,
+    toAgent: "ccb_claude",
+    taskId: requirement.id,
+    body: queue.command
+  });
+
+  const updated = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { id: queue.id } });
+  assert.equal(updated.status, "submitted");
+  assert.equal(updated.readinessWarning, false);
+  assert.ok(updated.submittedAt);
+
+  const event = await prisma.eventJournal.findFirstOrThrow({
+    where: { eventType: "anchor_dispatch_submitted", subjectType: "requirement", subjectId: requirement.id }
+  });
+  const payload = JSON.parse(event.payloadJson) as { jobId: string; traceRef?: string; readinessWarning?: boolean };
+  assert.equal(payload.jobId, queue.jobId);
+  assert.equal(payload.traceRef, "trace-1");
+  assert.equal(payload.readinessWarning, false);
+});
+
+test("runAnchorDispatchWorkerTick fail-opens readiness warning and still submits subtask dispatches", async () => {
+  const { task, anchor, queue } = await createSubtaskQueueFixture();
+  const askAcrossAnchor = vi.fn(async () => ({ jobId: "ccbd_job_2", traceRef: null }));
+  const waitForClaudeTuiReady = vi.fn(async () => ({
+    ready: false,
+    elapsedMs: 3000,
+    lastTitles: ["✳ Epic multi-PR code review"]
+  }));
+
+  const result = await runAnchorDispatchWorkerTick({
+    prismaClient: prisma,
+    askRouter: { askAcrossAnchor },
+    waitForClaudeTuiReady
+  });
+
+  assert.deepEqual(result, { count: 1, submitted: 1, failed: 0 });
+  assert.deepEqual(askAcrossAnchor.mock.calls[0]?.[0], {
+    targetAnchorId: anchor.anchorId,
+    toAgent: "ccb_claude",
+    taskId: task.taskKey,
+    body: queue.command
+  });
+
+  const updated = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { id: queue.id } });
+  assert.equal(updated.status, "submitted");
+  assert.equal(updated.readinessWarning, true);
+
+  const event = await prisma.eventJournal.findFirstOrThrow({
+    where: { eventType: "anchor_dispatch_submitted", subjectType: "subtask", subjectId: task.id }
+  });
+  const payload = JSON.parse(event.payloadJson) as { jobId: string; readinessWarning?: boolean };
+  assert.equal(payload.jobId, queue.jobId);
+  assert.equal(payload.readinessWarning, true);
+});
+
+test("runAnchorDispatchWorkerTick marks failed dispatches and emits failed event without retrying", async () => {
+  const { requirement, queue } = await createRequirementQueueFixture();
+  const askAcrossAnchor = vi.fn(async () => {
+    throw new AnchorSocketNotReadyError("anchor_dispatch_worker_requirement");
+  });
+
+  const result = await runAnchorDispatchWorkerTick({
+    prismaClient: prisma,
+    askRouter: { askAcrossAnchor },
+    waitForClaudeTuiReady: vi.fn(async () => ({ ready: true, elapsedMs: 1, lastTitles: ["Claude"] }))
+  });
+
+  assert.deepEqual(result, { count: 1, submitted: 0, failed: 1 });
+
+  const updated = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { id: queue.id } });
+  assert.equal(updated.status, "failed");
+  assert.ok(updated.failedAt);
+  assert.match(updated.errorMessage ?? "", /anchor socket is not ready/);
+
+  const event = await prisma.eventJournal.findFirstOrThrow({
+    where: { eventType: "anchor_dispatch_failed", subjectType: "requirement", subjectId: requirement.id }
+  });
+  const payload = JSON.parse(event.payloadJson) as { jobId: string; errorCode: string; errorMessage: string };
+  assert.equal(payload.jobId, queue.jobId);
+  assert.equal(payload.errorCode, "ANCHOR_SOCKET_NOT_READY");
+  assert.match(payload.errorMessage, /anchor socket is not ready/);
+});

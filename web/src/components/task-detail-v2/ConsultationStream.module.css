@@ -1,0 +1,116 @@
+.workbenchScope {
+  display: grid;
+  gap: var(--wb-space-3);
+}
+
+.messages {
+  display: grid;
+  gap: var(--wb-space-3);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.round {
+  display: grid;
+  gap: var(--wb-space-2);
+}
+
+.roundLabel,
+.sender,
+.muted,
+.empty {
+  color: var(--wb-color-text-secondary);
+  font-size: 12px;
+}
+
+.bubble {
+  display: grid;
+  gap: var(--wb-space-1);
+  max-width: min(720px, 100%);
+  border: 1px solid var(--wb-color-border-subtle);
+  border-radius: var(--wb-radius-lg);
+  padding: var(--wb-space-3);
+}
+
+.bubble p,
+.muted {
+  margin: 0;
+}
+
+.bubble p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.claude {
+  justify-self: start;
+  background: var(--wb-bubble-claude-bg);
+  color: var(--wb-bubble-claude-text);
+}
+
+.codex,
+.pending {
+  justify-self: start;
+  background: var(--wb-bubble-codex-bg);
+  color: var(--wb-bubble-codex-text);
+}
+
+.user {
+  justify-self: end;
+  background: var(--wb-bubble-user-bg);
+  color: var(--wb-bubble-user-text);
+}
+
+.error {
+  border: 1px solid var(--wb-color-error);
+  border-radius: var(--wb-radius-md);
+  color: var(--wb-color-error);
+  padding: var(--wb-space-2) var(--wb-space-3);
+  font-size: 13px;
+}
+
+.cancel {
+  justify-self: start;
+  border: 1px solid var(--wb-color-border-subtle);
+  border-radius: var(--wb-radius-sm);
+  background: var(--wb-color-surface);
+  color: var(--wb-color-text-primary);
+  cursor: pointer;
+  padding: var(--wb-space-2) var(--wb-space-3);
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--wb-space-2);
+}
+
+.composer textarea {
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid var(--wb-color-border-subtle);
+  border-radius: var(--wb-radius-md);
+  background: var(--wb-color-bg);
+  color: var(--wb-color-text-primary);
+  padding: var(--wb-space-3);
+  font: inherit;
+}
+
+.composer button {
+  align-self: end;
+  border: 1px solid var(--wb-color-primary);
+  border-radius: var(--wb-radius-md);
+  background: var(--wb-color-primary);
+  color: var(--wb-color-bg);
+  cursor: pointer;
+  padding: var(--wb-space-2) var(--wb-space-4);
+}
+
+.composer button:disabled {
+  border-color: var(--wb-color-border-subtle);
+  background: var(--wb-color-surface);
+  color: var(--wb-color-text-tertiary);
+  cursor: not-allowed;
+}

@@ -1,0 +1,21 @@
+{
+  "name": "su-oriel",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "dev:web": "pnpm --filter su-oriel-web dev",
+    "dev:server": "pnpm --filter su-oriel-server dev",
+    "build": "pnpm --filter su-oriel-web build && pnpm --filter su-oriel-server build",
+    "test": "pnpm --filter su-oriel-web test && pnpm --filter su-oriel-server test",
+    "lint:schema-ownership": "pnpm --filter su-oriel-server lint:schema-ownership",
+    "prepare": "husky install || true"
+  },
+  "devDependencies": {
+    "husky": "^8.0.3",
+    "lint-staged": "^16.2.7"
+  },
+  "lint-staged": {
+    "web/**/*.{ts,tsx,css,module.css}": "sh -c 'pnpm --filter su-oriel-web test --run'"
+  }
+}

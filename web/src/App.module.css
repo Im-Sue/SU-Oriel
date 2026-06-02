@@ -1,0 +1,120 @@
+.formGrid {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldLabel {
+  color: var(--gray-800);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.fieldHint {
+  color: var(--gray-500);
+  font-size: var(--text-xs);
+}
+
+.fidelityGrid {
+  display: grid;
+  gap: 12px;
+  border-left: 3px solid var(--blue-200);
+  padding-left: 14px;
+}
+
+.radioGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.radioItem {
+  display: flex;
+  gap: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  padding: 12px;
+}
+
+.radioItem:has(input:checked) {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.radioText {
+  display: grid;
+  gap: 4px;
+}
+
+.radioLabel {
+  color: var(--gray-800);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.radioDescription {
+  color: var(--gray-500);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.previewGrid {
+  display: grid;
+  gap: 16px;
+}
+
+.previewBlock {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+  padding: 16px;
+}
+
+.previewTitle {
+  color: var(--gray-800);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.previewList {
+  display: grid;
+  gap: 10px;
+}
+
+.previewItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gray-700);
+  font-size: var(--text-sm);
+}
+
+.previewTick {
+  color: var(--green-600);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.previewMeta {
+  display: grid;
+  gap: 6px;
+}
+
+.previewMetaLabel {
+  color: var(--gray-500);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.previewDescription {
+  color: var(--gray-700);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}

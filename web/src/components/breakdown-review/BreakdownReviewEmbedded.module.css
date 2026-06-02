@@ -1,0 +1,196 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.empty,
+.errorState {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: var(--gray-500);
+  background: var(--gray-50);
+  border: 1px dashed var(--gray-200);
+  border-radius: var(--radius-md);
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.errorIcon {
+  font-size: 32px;
+}
+
+.errorMsg {
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  max-width: 600px;
+  color: var(--gray-600);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 11px;
+  text-transform: uppercase;
+}
+
+.statusBadge[data-status="draft"] {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.statusBadge[data-status="reviewing"] {
+  background: var(--blue-50);
+  color: var(--blue-700);
+}
+
+.statusBadge[data-status="approved"] {
+  background: var(--green-50);
+  color: var(--green-700);
+}
+
+.statusBadge[data-status="consumed"] {
+  background: var(--purple-50);
+  color: var(--purple-700);
+}
+
+.statusBadge[data-status="cancelled"] {
+  background: var(--red-50);
+  color: var(--red-700);
+}
+
+.metaItem strong {
+  color: var(--gray-800);
+  font-weight: 600;
+}
+
+.metaItem code {
+  font-family: var(--font-mono);
+}
+
+.hash {
+  background: var(--gray-100);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--gray-700);
+}
+
+.rejectedHistory {
+  font-size: 11px;
+  color: var(--amber-700);
+  background: var(--amber-50);
+  border: 1px solid var(--amber-100);
+  padding: 2px var(--space-2);
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.rewriteBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--amber-50);
+  border: 1px solid var(--amber-100);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--amber-800);
+}
+
+.rewriteBanner strong {
+  display: block;
+  color: var(--amber-800);
+}
+
+.rewriteMeta {
+  font-size: var(--text-xs);
+  color: var(--amber-700);
+  margin-top: 2px;
+}
+
+.rewriteMeta em {
+  font-style: italic;
+  color: var(--gray-600);
+}
+
+.rewriteSpinner {
+  font-size: 22px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.threeCol {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr) minmax(0, 1.4fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.colLeft,
+.colMid,
+.colRight {
+  background: var(--gray-50);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gray-150);
+  overflow-y: auto;
+  max-height: calc(100vh - 240px);
+  min-height: 400px;
+}
+
+@media (max-width: 1100px) {
+  .threeCol {
+    grid-template-columns: 1fr;
+  }
+
+  .colLeft,
+  .colMid,
+  .colRight {
+    max-height: none;
+  }
+}

@@ -1,0 +1,92 @@
+.banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--cc-space-4);
+  border: 1px solid var(--cc-color-border-subtle);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: var(--cc-color-bg-surface);
+  padding: var(--cc-space-3) var(--cc-space-4);
+  margin-bottom: var(--cc-space-4);
+  box-shadow: var(--cc-shadow-sm);
+}
+
+.runtime-missing {
+  border-color: var(--red-200);
+  border-left-color: var(--red-500);
+  background: var(--red-50);
+}
+
+.knowledge-missing {
+  border-color: var(--amber-100);
+  border-left-color: var(--amber-600);
+  background: var(--yellow-50);
+}
+
+.ready {
+  border-color: var(--green-100);
+  border-left-color: var(--green-600);
+  background: var(--green-50);
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--cc-space-1);
+}
+
+.title {
+  color: var(--cc-color-text-primary);
+  font-size: var(--cc-text-size-sm);
+  font-weight: var(--cc-text-weight-semibold);
+  line-height: var(--cc-text-line-tight);
+}
+
+.message {
+  min-width: 0;
+  color: var(--cc-color-text-secondary);
+  font-size: var(--cc-text-size-sm);
+  line-height: var(--cc-text-line-base);
+}
+
+.message code {
+  border: 1px solid var(--cc-color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--cc-color-text-primary);
+  font-family: var(--cc-text-font-mono);
+  font-size: var(--cc-text-size-xs);
+  padding: 1px var(--cc-space-1);
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cc-space-2);
+}
+
+.modalBody {
+  display: grid;
+  gap: var(--cc-space-3);
+  color: var(--cc-color-text-secondary);
+  font-size: var(--cc-text-size-sm);
+  line-height: var(--cc-text-line-base);
+}
+
+.modalBody p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .banner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}

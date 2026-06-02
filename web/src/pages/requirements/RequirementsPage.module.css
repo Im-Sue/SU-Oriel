@@ -1,0 +1,172 @@
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- 顶部信息 / 操作行 ---- */
+.boardHintRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.boardHint {
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-sm);
+}
+
+.refreshAllButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--cc-color-gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--cc-color-bg-surface);
+  padding: 6px 12px;
+  color: var(--cc-color-gray-700);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.refreshAllButton:hover:not(:disabled) {
+  border-color: var(--cc-color-gray-300);
+  background: var(--cc-color-gray-50);
+}
+
+.refreshAllButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- 看板栅格（与任务看板 TasksPage.module.css 的 .kanban / .column 保持一致）---- */
+.kanban {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  padding-bottom: 8px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 420px;
+  border: 1px solid var(--cc-color-gray-200);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-bg-surface);
+  padding: 12px;
+}
+
+.column[data-archived="true"] {
+  opacity: 0.78;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--cc-color-gray-800);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.columnTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.columnBody {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.emptyColumn {
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-xs);
+}
+
+/* ---- 需求卡片（裁掉任务卡片专有的优先级条 / 进度条 / 节点徽标）---- */
+.boardCard {
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cardTitle {
+  color: var(--cc-color-gray-800);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.refreshOneButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--cc-color-gray-400);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.refreshOneButton:hover {
+  border-color: var(--cc-color-gray-200);
+  background: var(--cc-color-gray-50);
+  color: var(--cc-color-gray-700);
+}
+
+.cardBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cardDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--cc-color-gray-600);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  word-break: break-word;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.cardDate {
+  color: var(--cc-color-gray-400);
+  font-size: var(--text-xs);
+}
+
+.cardAction {
+  color: var(--cc-color-blue-600, var(--blue-600, #1d4ed8));
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}

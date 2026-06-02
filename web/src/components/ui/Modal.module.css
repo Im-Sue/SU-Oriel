@@ -1,0 +1,64 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  animation: fade-in 150ms ease;
+}
+
+.modal {
+  max-height: 90vh;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
+  animation: slide-up 200ms ease;
+}
+
+.modal_sm {
+  width: 480px;
+}
+
+.modal_md {
+  width: 720px;
+}
+
+.modal_lg {
+  width: 960px;
+}
+
+.modal_xl {
+  width: min(1200px, 92vw);
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--gray-200);
+  border-bottom: none;
+}
+
+.content {
+  max-height: calc(90vh - 140px);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.closeButton {
+  cursor: pointer;
+  color: var(--gray-500);
+  font-size: 20px;
+}

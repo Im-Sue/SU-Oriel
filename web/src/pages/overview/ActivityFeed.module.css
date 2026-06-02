@@ -1,0 +1,124 @@
+.card {
+  display: grid;
+  gap: var(--cc-space-4);
+  border: 1px solid var(--cc-color-gray-200);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-bg-surface);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cc-space-4);
+}
+
+.title {
+  margin: 0;
+  color: var(--cc-color-gray-800);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.description {
+  margin: 4px 0 0;
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-xs);
+}
+
+.linkButton {
+  color: var(--cc-color-blue-600);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.list {
+  display: grid;
+}
+
+.row {
+  display: grid;
+  align-items: center;
+  gap: var(--cc-space-3);
+  grid-template-columns: 22px minmax(0, 1fr);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--cc-color-gray-100);
+  text-align: left;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+button.row {
+  cursor: pointer;
+}
+
+button.row:hover .label {
+  color: var(--cc-color-blue-700);
+}
+
+.icon {
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.label {
+  overflow: hidden;
+  color: var(--cc-color-gray-800);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-xs);
+}
+
+.row[data-tone="success"] {
+  border-left: 3px solid var(--cc-color-green-500);
+  padding-left: var(--cc-space-2);
+}
+
+.row[data-tone="warn"] {
+  border-left: 3px solid var(--cc-color-yellow-500);
+  padding-left: var(--cc-space-2);
+}
+
+.row[data-tone="danger"] {
+  border-left: 3px solid var(--cc-color-red-500);
+  padding-left: var(--cc-space-2);
+}
+
+.row[data-tone="info"] {
+  border-left: 3px solid var(--cc-color-gray-300);
+  padding-left: var(--cc-space-2);
+}
+
+.placeholder {
+  border: 1px dashed var(--cc-color-gray-200);
+  border-radius: var(--radius-md);
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-sm);
+  padding: var(--cc-space-4);
+}
+
+.error {
+  border: 1px solid var(--cc-color-red-200);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-red-50);
+  color: var(--cc-color-red-600);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: var(--cc-space-4);
+}

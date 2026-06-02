@@ -1,0 +1,905 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  /// @owner(console-internal, operator)
+  id          String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  name        String
+  /// @owner(console-internal, operator)
+  localPath   String    @unique
+  /// @owner(console-internal, operator)
+  summary     String?
+  /// @owner(console-internal, operator)
+  initStatus  String    @default("not_initialized")
+  /// @owner(console-internal, operator)
+  docsRoot    String?
+  /// @owner(console-internal, operator)
+  lastScanAt  DateTime?
+  /// @owner(console-internal, operator)
+  syncStatus  String    @default("idle")
+  /// @owner(console-internal, operator)
+  ownerUserId String?
+  /// @owner(console-internal, operator)
+  createdBy   String?
+  /// @owner(console-internal, operator)
+  updatedBy   String?
+  /// @owner(console-internal, operator)
+  createdAt   DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt   DateTime  @updatedAt
+
+  documents        Document[]
+  tasks            Task[]
+  requirements     Requirement[]
+  requirementEditAudits RequirementEditAudit[]
+  syncJobs         SyncJob[]
+  aiCliSettings    AiCliSetting[]
+  taskWorkspaces   TaskWorkspace[]
+  reviewIntents    ReviewIntent[]
+  eventJournals    EventJournal[]
+  slotBindings     SlotBinding[]
+  projectSettings  ProjectSettings?
+  executorProfiles ExecutorProfile[]
+  sprints          Sprint[]
+}
+
+model ProjectSettings {
+  /// @owner(console-internal, operator)
+  id               String   @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId        String   @unique
+  /// @owner(console-internal, operator)
+  scanStrategyJson String   @map("scan_strategy")
+  /// @owner(console-internal, operator)
+  parsingRulesJson String   @map("parsing_rules")
+  /// @owner(console-internal, operator)
+  pathConfigJson   String   @map("path_config")
+  /// @owner(console-internal, operator)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  /// @owner(console-projection, indexer)
+  id              String   @id @default(cuid())
+  /// @owner(console-projection, indexer)
+  projectId       String
+  /// @owner(console-projection, indexer)
+  taskKey         String?
+  /// @owner(console-projection, indexer)
+  path            String
+  /// @owner(console-projection, indexer)
+  kind            String
+  /// @owner(console-projection, indexer)
+  title           String
+  /// @owner(console-projection, indexer)
+  status          String?
+  /// @owner(console-projection, indexer)
+  frontmatterJson String?
+  /// @owner(console-projection, indexer)
+  summary         String?
+  /// @owner(console-projection, indexer)
+  contentHash     String
+  /// @owner(console-projection, indexer)
+  mtime           DateTime
+  /// @owner(console-projection, indexer)
+  parseStatus     String   @default("success")
+  /// @owner(console-projection, indexer)
+  parseError      String?
+  /// @owner(console-projection, indexer)
+  createdBy       String?
+  /// @owner(console-projection, indexer)
+  updatedBy       String?
+  /// @owner(console-projection, indexer)
+  createdAt       DateTime @default(now())
+  /// @owner(console-projection, indexer)
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, path])
+}
+
+model Task {
+  /// @owner(console-internal, operator)
+  id                     String  @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId              String
+  /// @owner(plugin-canonical, dev-task)
+  taskKey                String
+  /// @owner(plugin-canonical, dev-task)
+  title                  String
+  /// @owner(console-projection, indexer)
+  summary                String?
+  /// @owner(plugin-canonical, dev-task)
+  status                 String  @default("reviewing")
+  /// @owner(plugin-canonical, dev-task)
+  currentNode            String?
+  /// @owner(plugin-canonical, dev-task)
+  nodeSubstate           String?
+  /// @owner(plugin-canonical, dev-task)
+  runtimeState           String? @default("running")
+  /// @owner(plugin-canonical, dev-task)
+  lastTransitionId       String?
+  /// @owner(console-internal, operator)
+  ownerUserId            String?
+  /// @owner(console-internal, operator)
+  assigneeUserId         String?
+  /// @owner(console-internal, operator)
+  reviewerUserId         String?
+  /// @owner(console-internal, operator)
+  createdBy              String?
+  /// @owner(console-internal, operator)
+  updatedBy              String?
+  /// @owner(console-internal, operator)
+  priority               String  @default("medium")
+  /// @owner(plugin-canonical, dev-task)
+  progress               Int     @default(0)
+  /// @owner(console-projection, indexer)
+  primaryDocumentId      String?
+  /// @owner(plugin-canonical, dev-task)
+  blockedReason          String?
+  /// @owner(plugin-canonical, dev-task)
+  requirementId          String?
+  /// @owner(plugin-canonical, dev-task)
+  reviewStatus           String?
+  /// @owner(plugin-canonical, dev-task)
+  verificationResultJson String?
+  /// @owner(plugin-canonical, dev-task)
+  reviewFollowupJson     String?
+  /// @owner(plugin-canonical, dev-task)
+  specSectionId       String? // D10: epic spec 内 section 索引
+  /// @owner(plugin-canonical, dev-task)
+  implementationOwner String? // D11: 'claude' | 'ccb_codex'
+  // ===== TAPD 迭代 (Phase C) =====
+  /// @owner(console-internal, operator)
+  sprintId            String? // FK → Sprint.id, nullable 即未分配迭代
+  /// @owner(console-internal, operator)
+  storyPoints         Int? // 工时估点
+  /// @owner(console-internal, operator)
+  createdAt DateTime @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt DateTime @updatedAt
+
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspaces      TaskWorkspace[]
+  reviewIntents   ReviewIntent[]
+  taskRuns        TaskRun[]
+  checkpoints     TaskCheckpoint[]
+  consultRequests ConsultRequest[]
+  userIntents     UserIntent[]
+  requirement     Requirement?         @relation("RequirementTasks", fields: [requirementId], references: [id])
+  sprint          Sprint?              @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, taskKey])
+  @@index([requirementId, currentNode])
+  @@index([currentNode])
+  @@index([sprintId])
+}
+
+enum AnchorAllocationState {
+  planned
+  worktree_creating
+  configuring
+  mounting
+  ready
+  busy
+  idle_dirty
+  archiving
+  destroyed
+  mount_failed
+  recovering
+  orphaned
+  cleanup_required
+}
+
+model AnchorAllocation {
+  /// @owner(console-internal, operator)
+  anchorId         String                @id @default(cuid()) @map("anchor_id")
+  /// @owner(console-internal, operator)
+  anchorPath       String                @unique @map("anchor_path")
+  /// @owner(console-internal, operator)
+  projectId        String?               @map("project_id")
+  /// @owner(console-internal, operator)
+  socketPath       String?               @map("socket_path")
+  /// @owner(console-internal, operator)
+  runtimePaused    Boolean               @default(false) @map("runtime_paused")
+  /// @owner(console-internal, operator)
+  subjectType      String                @map("subject_type") // requirement | subtask
+  /// @owner(console-internal, operator)
+  subjectId        String                @map("subject_id")
+  /// @owner(console-internal, operator)
+  subjectKey       String?               @map("subject_key")
+  /// @owner(console-internal, operator)
+  mode             String                @default("execution") // planning | execution
+  /// @owner(console-internal, operator)
+  state            AnchorAllocationState @default(planned)
+  /// @owner(console-internal, operator)
+  dirtyState       String?               @map("dirty_state")
+  /// @owner(console-internal, operator)
+  startedAt        DateTime?             @map("started_at")
+  /// @owner(console-internal, operator)
+  heartbeatAt      DateTime?             @map("heartbeat_at")
+  /// @owner(console-internal, operator)
+  createdAt        DateTime              @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  @@index([state])
+  @@index([subjectType, subjectId, mode])
+  @@map("anchor_allocation")
+}
+
+model AnchorDispatchQueue {
+  /// @owner(console-internal, operator)
+  id               String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  jobId            String    @unique
+  /// @owner(console-internal, operator)
+  anchorId         String
+  /// @owner(console-internal, operator)
+  subjectType      String
+  /// @owner(console-internal, operator)
+  subjectId        String
+  /// @owner(console-internal, operator)
+  command          String
+  /// @owner(console-internal, operator)
+  status           String    @default("pending")
+  /// @owner(console-internal, operator)
+  queuedAt         DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  submittedAt      DateTime?
+  /// @owner(console-internal, operator)
+  failedAt         DateTime?
+  /// @owner(console-internal, operator)
+  errorMessage     String?
+  /// @owner(console-internal, operator)
+  readinessWarning Boolean?
+
+  @@index([status, queuedAt])
+  @@index([subjectType, subjectId])
+}
+
+enum SlotBindingState {
+  idle
+  bound
+  busy
+  unhealthy
+  recovering
+  draining
+}
+
+model SlotBinding {
+  /// @owner(console-internal, operator)
+  id                 String           @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId          String           @map("project_id")
+  /// @owner(console-internal, operator)
+  slotId             String           @map("slot_id")
+  /// @owner(console-internal, operator)
+  requirementId      String?          @map("requirement_id")
+  /// @owner(console-internal, operator)
+  state              SlotBindingState @default(idle)
+  /// @owner(console-internal, operator)
+  boundAt            DateTime?        @map("bound_at")
+  /// @owner(console-internal, operator)
+  releasedAt         DateTime?        @map("released_at")
+  /// @owner(console-internal, operator)
+  busySince          DateTime?        @map("busy_since")
+  /// @owner(console-internal, operator)
+  lastActivityAt     DateTime?        @map("last_activity_at")
+  /// @owner(console-internal, operator)
+  staleDetectedAt    DateTime?        @map("stale_detected_at")
+  /// @owner(console-internal, operator)
+  staleNotifiedCount Int              @default(0) @map("stale_notified_count")
+  /// @owner(console-internal, operator)
+  historyJson        String           @default("[]") @map("history_json")
+  /// @owner(console-internal, operator)
+  createdAt          DateTime         @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, slotId])
+  @@index([projectId, state])
+  @@index([requirementId])
+  @@map("slot_binding")
+}
+
+// Sprint / 迭代 (Phase C, TAPD-inspired)
+model Sprint {
+  /// @owner(console-internal, operator)
+  id               String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId        String
+  /// @owner(console-internal, operator)
+  name             String
+  /// @owner(console-internal, operator)
+  goal             String?
+  /// @owner(console-internal, operator)
+  status           String    @default("planning") // planning | active | closed | cancelled
+  /// @owner(console-internal, operator)
+  startDate        DateTime?
+  /// @owner(console-internal, operator)
+  endDate          DateTime?
+  /// @owner(console-internal, operator)
+  capacity         Int? // 计划工时（story points）
+  /// @owner(console-internal, operator)
+  burndownDataJson String? // 历史 burndown snapshots (JSON array)，每天一条
+  /// @owner(console-internal, operator)
+  createdAt        DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt        DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([projectId, status])
+}
+
+enum ConsultRequestStatus {
+  pending
+  consumed
+  cancelled
+  rejected
+}
+
+model ConsultRequest {
+  /// @owner(console-internal, operator)
+  id           String               @id @default(cuid())
+  /// @owner(console-internal, operator)
+  taskId       String               @map("task_id")
+  /// @owner(console-internal, operator)
+  taskKey      String               @map("task_key")
+  /// @owner(console-internal, operator)
+  nodeId       String               @map("node_id")
+  /// @owner(console-internal, operator)
+  message      String
+  /// @owner(console-internal, operator)
+  targetAgent  String               @map("target_agent")
+  /// @owner(console-internal, operator)
+  status       ConsultRequestStatus @default(pending)
+  /// @owner(console-internal, operator)
+  consultRound String?              @map("consult_round")
+  /// @owner(console-internal, operator)
+  createdBy    String               @map("created_by")
+  /// @owner(console-internal, operator)
+  createdAt    DateTime             @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  consumedAt   DateTime?            @map("consumed_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@map("consult_requests")
+}
+
+model TaskCheckpoint {
+  /// @owner(append-only-audit, eventjournal)
+  id                 String   @id @default(cuid())
+  /// @owner(append-only-audit, eventjournal)
+  taskId             String   @map("task_id")
+  /// @owner(append-only-audit, eventjournal)
+  taskKey            String   @map("task_key")
+  /// @owner(append-only-audit, eventjournal)
+  transitionId       String   @map("transition_id")
+  /// @owner(append-only-audit, eventjournal)
+  nodeBefore         String?  @map("node_before")
+  /// @owner(append-only-audit, eventjournal)
+  nodeAfter          String?  @map("node_after")
+  /// @owner(append-only-audit, eventjournal)
+  stateRevisionAfter Int      @map("state_revision_after")
+  /// @owner(append-only-audit, eventjournal)
+  stateHash          String   @map("state_hash")
+  /// @owner(append-only-audit, eventjournal)
+  snapshotInline     String?  @map("snapshot_inline")
+  /// @owner(append-only-audit, eventjournal)
+  snapshotPath       String?  @map("snapshot_path")
+  /// @owner(append-only-audit, eventjournal)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, transitionId])
+  @@index([taskId, createdAt])
+  @@map("task_checkpoints")
+}
+
+/// Allowed statuses: pending, dispatched, running, paused, completed, cancelled, failed.
+model TaskRun {
+  /// @owner(console-internal, operator)
+  id              String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  taskId          String
+  /// @owner(console-internal, operator)
+  status          String    @default("pending")
+  /// @owner(console-internal, operator)
+  attemptN        Int       @default(1) @map("attempt_n")
+  /// @owner(console-internal, operator)
+  dispatchedAt    DateTime? @map("dispatched_at")
+  /// @owner(console-internal, operator)
+  completedAt     DateTime? @map("completed_at")
+  /// @owner(console-internal, operator)
+  errorSummary    String?   @map("error_summary")
+  /// @owner(console-internal, operator)
+  transitionsJson String    @default("[]") @map("transitions")
+  /// @owner(console-internal, operator)
+  workspacePath   String?   @map("workspace_path")
+  /// @owner(console-internal, operator)
+  worktreeBranch  String?   @map("worktree_branch")
+  /// @owner(console-internal, operator)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([taskId, attemptN])
+  @@index([status])
+}
+
+model Requirement {
+  /// @owner(console-internal, operator)
+  id                   String   @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId            String
+  /// @owner(plugin-canonical, requirement-md)
+  title                String
+  /// @owner(plugin-canonical, requirement-md)
+  description          String
+  /// @owner(plugin-canonical, requirement-md)
+  status               String   @default("drafting") // enum: drafting|planning|delivering|delivered|deferred|cancelled (ADR-0028)
+  /// @owner(console-internal, operator)
+  source               String   @default("manual")
+  /// @owner(plugin-canonical, requirement-md)
+  verbatimSource       String?
+  /// @owner(plugin-canonical, requirement-md)
+  claudeInterpretation String?
+  /// @owner(plugin-canonical, requirement-md)
+  ambiguities          String?
+  /// @owner(plugin-canonical, requirement-md)
+  fidelityDiff         String?
+  /// @owner(plugin-canonical, requirement-md)
+  analysisInputHash    String?
+  /// @owner(plugin-canonical, requirement-md)
+  analysisStaleAt      DateTime?
+  /// @owner(plugin-canonical, requirement-md)
+  currentPlanningNode  String?
+  /// @owner(plugin-canonical, requirement-md)
+  currentPlanningStep  String?  @default("analysis") // analysis|design|breakdown_draft|ready_to_materialize
+  /// @owner(plugin-canonical, requirement-md)
+  planningSubstate     String?
+  /// @owner(plugin-canonical, requirement-md)
+  planningRuntimeState String?  @default("idle")
+  /// @owner(plugin-canonical, requirement-md)
+  lastPlanningTransitionId String?
+  /// @owner(plugin-canonical, requirement-md)
+  planDocPath          String?
+  /// @owner(plugin-canonical, requirement-md)
+  breakdownDraftPath   String?
+  /// @owner(console-internal, operator)
+  planningAnchorId     String?
+  /// @owner(plugin-canonical, requirement-md)
+  rollupProgress       Int      @default(0)
+  /// @owner(plugin-canonical, requirement-md)
+  rollupStatus         String?
+  /// @owner(console-internal, operator)
+  createdBy            String?
+  /// @owner(console-internal, operator)
+  updatedBy            String?
+  /// @owner(console-internal, operator)
+  createdAt            DateTime @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt            DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]  @relation("RequirementTasks")
+  editAudits RequirementEditAudit[]
+  slotBindings SlotBinding[]
+}
+
+/// RequirementEditAudit · Requirement title/description md-first edit audit
+model RequirementEditAudit {
+  /// @owner(append-only-audit, eventjournal)
+  id                String   @id @default(cuid())
+  /// @owner(append-only-audit, eventjournal)
+  projectId         String
+  /// @owner(append-only-audit, eventjournal)
+  requirementId     String
+  /// @owner(append-only-audit, eventjournal)
+  editor            String
+  /// @owner(append-only-audit, eventjournal)
+  changeReason      String?
+  /// @owner(append-only-audit, eventjournal)
+  beforeTitle       String
+  /// @owner(append-only-audit, eventjournal)
+  afterTitle        String
+  /// @owner(append-only-audit, eventjournal)
+  beforeDescription String
+  /// @owner(append-only-audit, eventjournal)
+  afterDescription  String
+  /// @owner(append-only-audit, eventjournal)
+  beforeMdHash      String
+  /// @owner(append-only-audit, eventjournal)
+  afterMdHash       String
+  /// @owner(append-only-audit, eventjournal)
+  diffJson          String
+  /// @owner(append-only-audit, eventjournal)
+  createdAt         DateTime @default(now())
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([editor, createdAt])
+}
+
+model AiCliSetting {
+  /// @owner(console-internal, operator)
+  id          String   @id @default(cuid())
+  /// @owner(console-internal, operator)
+  scope       String
+  /// @owner(console-internal, operator)
+  projectId   String?
+  /// @owner(console-internal, operator)
+  toolId      String
+  /// @owner(console-internal, operator)
+  command     String?
+  /// @owner(console-internal, operator)
+  extraArgs   String?
+  /// @owner(console-internal, operator)
+  defaultMode String?
+  /// @owner(console-internal, operator)
+  createdAt   DateTime @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt   DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([scope, projectId, toolId])
+}
+
+model SyncJob {
+  /// @owner(console-internal, operator)
+  id           String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId    String
+  /// @owner(console-internal, operator)
+  jobType      String
+  /// @owner(console-internal, operator)
+  status       String    @default("pending")
+  /// @owner(console-internal, operator)
+  startedAt    DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  finishedAt   DateTime?
+  /// @owner(console-internal, operator)
+  logSummary   String?
+  /// @owner(console-internal, operator)
+  errorMessage String?
+  /// @owner(console-internal, operator)
+  processedCount Int      @default(0)
+  /// @owner(console-internal, operator)
+  totalCount     Int      @default(0)
+  /// @owner(console-internal, operator)
+  createdAt    DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt    DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model TaskWorkspace {
+  /// @owner(console-internal, operator)
+  id             String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId      String
+  /// @owner(console-internal, operator)
+  taskId         String
+  /// @owner(console-internal, operator)
+  lockedByRunId  String?
+  /// @owner(console-internal, operator)
+  taskKey        String
+  /// @owner(console-internal, operator)
+  baseRef        String    @default("HEAD")
+  /// @owner(console-internal, operator)
+  branchName     String
+  /// @owner(console-internal, operator)
+  workspacePath  String
+  /// @owner(console-internal, operator)
+  status         String    @default("creating")
+  /// @owner(console-internal, operator)
+  lockMode       String    @default("exclusive")
+  /// @owner(console-internal, operator)
+  cleanupPolicy  String    @default("manual")
+  /// @owner(console-internal, operator)
+  cleanupAfter   DateTime?
+  /// @owner(console-internal, operator)
+  lastVerifiedAt DateTime?
+  /// @owner(console-internal, operator)
+  errorMessage   String?
+  /// @owner(console-internal, operator)
+  createdAt      DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt      DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([branchName])
+  @@index([lockedByRunId])
+}
+
+model ReviewIntent {
+  /// @owner(console-internal, operator)
+  id            String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId     String
+  /// @owner(console-internal, operator)
+  taskId        String
+  /// @owner(console-internal, operator)
+  taskKey       String
+  /// @owner(console-internal, operator)
+  intentType    String
+  /// @owner(console-internal, operator)
+  payloadJson   String?
+  /// @owner(console-internal, operator)
+  status        String    @default("pending")
+  /// @owner(console-internal, operator)
+  actor         String?
+  /// @owner(console-internal, operator)
+  consumedAt    DateTime?
+  /// @owner(console-internal, operator)
+  consumedBy    String?
+  /// @owner(console-internal, operator)
+  attemptCount  Int       @default(0)
+  /// @owner(console-internal, operator)
+  lastError     String?
+  /// @owner(console-internal, operator)
+  lastAttemptAt DateTime?
+  /// @owner(console-internal, operator)
+  createdAt     DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt     DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, status])
+  @@index([intentType])
+}
+
+model EventJournal {
+  /// @owner(append-only-audit, eventjournal)
+  id                String   @id @default(cuid())
+  /// @owner(append-only-audit, eventjournal)
+  eventId           String   @unique
+  /// @owner(append-only-audit, eventjournal)
+  eventType         String
+  /// @owner(append-only-audit, eventjournal)
+  projectId         String
+  /// @owner(append-only-audit, eventjournal)
+  subjectType       String   @map("subject_type") // requirement | subtask
+  /// @owner(append-only-audit, eventjournal)
+  subjectId         String   @map("subject_id")
+  /// @owner(append-only-audit, eventjournal)
+  subjectKey        String?  @map("subject_key")
+  /// @owner(append-only-audit, eventjournal)
+  anchorId          String?  @map("anchor_id")
+  /// @owner(append-only-audit, eventjournal)
+  payloadJson       String
+  /// @owner(append-only-audit, eventjournal)
+  emittedAt         DateTime
+  /// @owner(append-only-audit, eventjournal)
+  sourceActor       String?
+  /// @owner(append-only-audit, eventjournal)
+  sourceComponent   String?
+  /// @owner(append-only-audit, eventjournal)
+  causationId       String?
+  /// @owner(append-only-audit, eventjournal)
+  correlationId     String?
+  /// @owner(append-only-audit, eventjournal)
+  stateRevisionSeen Int?
+  /// @owner(append-only-audit, eventjournal)
+  idempotencyKey    String?
+  /// @owner(append-only-audit, eventjournal)
+  createdAt         DateTime @default(now())
+  /// @owner(append-only-audit, eventjournal)
+  updatedAt         DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([subjectType, subjectId, eventType, emittedAt])
+  @@index([projectId, eventType, emittedAt])
+  @@index([eventType, emittedAt])
+  @@index([anchorId, emittedAt])
+}
+
+model HookAuditLog {
+  /// @owner(append-only-audit, eventjournal)
+  id                  String   @id @default(cuid())
+  /// @owner(append-only-audit, eventjournal)
+  hookName            String   @map("hook_name")
+  /// @owner(append-only-audit, eventjournal)
+  triggeredAt         DateTime @default(now()) @map("triggered_at")
+  /// @owner(append-only-audit, eventjournal)
+  payloadSnapshotJson String   @map("payload_snapshot")
+  /// @owner(append-only-audit, eventjournal)
+  outcomeJson         String   @map("outcome")
+  /// @owner(append-only-audit, eventjournal)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([hookName, triggeredAt])
+}
+
+/// PrimitiveAudit · F7 · 每次 primitiveExecutor.run 落盘 1 行
+/// 幂等机制：idempotencyKey 唯一索引 · 重入查 result_json 返回 cached
+model PrimitiveAudit {
+  /// @owner(append-only-audit, eventjournal)
+  id             String    @id @default(cuid())
+  /// @owner(append-only-audit, eventjournal)
+  primitive      String
+  /// @owner(append-only-audit, eventjournal)
+  mutationType   String
+  /// @owner(append-only-audit, eventjournal)
+  idempotencyKey String?   @unique
+  /// @owner(append-only-audit, eventjournal)
+  status         String
+  /// @owner(append-only-audit, eventjournal)
+  resultJson     String?
+  /// @owner(append-only-audit, eventjournal)
+  errorJson      String?
+  /// @owner(append-only-audit, eventjournal)
+  startedAt      DateTime  @default(now())
+  /// @owner(append-only-audit, eventjournal)
+  completedAt    DateTime?
+  /// @owner(append-only-audit, eventjournal)
+  durationMs     Int?
+
+  @@index([primitive, startedAt])
+  @@index([status, startedAt])
+}
+
+model NodeRun {
+  /// @owner(console-internal, operator)
+  id                      String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  taskId                  String
+  /// @owner(console-internal, operator)
+  version                 String    @default("noderun-v0.1")
+  /// @owner(console-internal, operator)
+  nodeId                  String
+  /// @owner(console-internal, operator)
+  enteredAt               DateTime
+  /// @owner(console-internal, operator)
+  exitedAt                DateTime?
+  /// @owner(console-internal, operator)
+  transitionsJson         String    @default("[]")
+  /// @owner(console-internal, operator)
+  capabilityDecisionsJson String    @default("[]")
+  /// @owner(console-internal, operator)
+  mutationSourcesJson     String?
+  /// @owner(console-internal, operator)
+  createdAt               DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt               DateTime  @updatedAt
+
+  @@index([taskId, enteredAt])
+  @@index([nodeId, enteredAt])
+}
+
+model CapabilityStatus {
+  /// @owner(console-internal, operator)
+  id            String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  version       String    @default("cap-matrix-v0.1")
+  /// @owner(console-internal, operator)
+  name          String
+  /// @owner(console-internal, operator)
+  bindingSource String
+  /// @owner(console-internal, operator)
+  status        String
+  /// @owner(console-internal, operator)
+  lastUsedAt    DateTime?
+  /// @owner(console-internal, operator)
+  createdAt     DateTime  @default(now())
+  /// @owner(console-internal, operator)
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([name, bindingSource])
+  @@index([status])
+  @@index([bindingSource, status])
+}
+
+model ExecutorProfile {
+  /// @owner(console-internal, operator)
+  id                    String   @id @default(cuid())
+  /// @owner(console-internal, operator)
+  projectId             String
+  /// @owner(console-internal, operator)
+  name                  String
+  /// @owner(console-internal, operator)
+  provider              String
+  /// @owner(console-internal, operator)
+  model                 String
+  /// @owner(console-internal, operator)
+  runtime               String
+  /// @owner(console-internal, operator)
+  permission            String
+  /// @owner(console-internal, operator)
+  capabilityBindingJson String   @map("capability_binding")
+  /// @owner(console-internal, operator)
+  version               String   @default("executor-profile-v0.1")
+  /// @owner(console-internal, operator)
+  metaJson              String?  @map("meta")
+  /// @owner(console-internal, operator)
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roleProfiles RoleProfile[]
+
+  @@unique([projectId, name])
+  @@index([provider, model])
+  @@index([runtime])
+  @@index([permission])
+}
+
+model RoleProfile {
+  /// @owner(console-internal, operator)
+  id                    String   @id @default(cuid())
+  /// @owner(console-internal, operator)
+  name                  String
+  /// @owner(console-internal, operator)
+  executorProfileId     String   @map("executor_profile_id")
+  /// @owner(console-internal, operator)
+  promptTemplateRef     String   @map("prompt_template_ref")
+  /// @owner(console-internal, operator)
+  variableOverridesJson String   @map("variable_overrides")
+  /// @owner(console-internal, operator)
+  version               String   @default("role-profile-v0.1")
+  /// @owner(console-internal, operator)
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  executorProfile ExecutorProfile @relation(fields: [executorProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([executorProfileId, name])
+  @@index([promptTemplateRef])
+}
+
+model UserIntent {
+  /// @owner(console-internal, operator)
+  id         String    @id @default(cuid())
+  /// @owner(console-internal, operator)
+  taskId     String    @map("task_id")
+  /// @owner(console-internal, operator)
+  ccbJobId   String?   @map("ccb_job_id")
+  /// @owner(console-internal, operator)
+  intentType String    @map("intent_type") // 'append_instruction' | 'change_direction' | 'pause'
+  /// @owner(console-internal, operator)
+  body       String
+  /// @owner(console-internal, operator)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  /// @owner(console-internal, operator)
+  consumedAt DateTime? @map("consumed_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, consumedAt])
+  @@map("user_intent")
+}

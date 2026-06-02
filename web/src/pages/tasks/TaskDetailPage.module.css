@@ -1,0 +1,79 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.mainColumn {
+  min-width: 0;
+}
+
+.epicNote {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--purple-50);
+  color: var(--purple-500);
+  border: 1px solid var(--purple-500);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.commandAction {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.commandActionButton {
+  border: 1px solid var(--blue-500);
+  border-radius: var(--radius-sm);
+  background: var(--blue-600);
+  color: var(--white);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+.commandActionButton:hover:not(:disabled) {
+  background: var(--blue-700);
+}
+
+.commandActionButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.commandHint {
+  color: var(--gray-500);
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 1280px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .page {
+    padding: var(--space-3);
+  }
+}

@@ -1,0 +1,189 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  animation: fade-in 160ms ease-out;
+}
+
+.modal {
+  width: 100%;
+  max-width: 880px;
+  max-height: 85vh;
+  background: white;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: pop-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--gray-900);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  color: var(--gray-600);
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.closeButton:hover {
+  background: white;
+  border-color: var(--gray-400);
+  color: var(--gray-900);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.placeholder {
+  margin: 0;
+  color: var(--gray-500);
+  font-style: italic;
+}
+
+.error {
+  margin: 0;
+  color: var(--red-600);
+  background: var(--red-50);
+  border: 1px solid var(--red-200, var(--gray-200));
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.kindBadge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.kindBadge[data-color="green"]  { background: var(--green-100); color: var(--green-700); }
+.kindBadge[data-color="blue"]   { background: var(--blue-50);   color: var(--blue-600); }
+.kindBadge[data-color="yellow"] { background: var(--yellow-50); color: var(--yellow-700); }
+.kindBadge[data-color="purple"] { background: var(--purple-50); color: var(--purple-500); }
+.kindBadge[data-color="orange"] { background: var(--orange-50); color: var(--orange-600); }
+.kindBadge[data-color="gray"]   { background: var(--gray-100);  color: var(--gray-600); }
+.kindBadge[data-color="red"]    { background: var(--red-50);    color: var(--red-600); }
+
+.path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11px;
+  color: var(--gray-700);
+  background: var(--gray-50);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown {
+  flex: 1 1 auto;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  flex-shrink: 0;
+}
+
+.button {
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  color: var(--gray-700);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+
+.button:hover {
+  background: var(--gray-100);
+  border-color: var(--gray-400);
+}
+
+.primaryButton {
+  margin-left: auto;
+  padding: var(--space-2) var(--space-3);
+  background: var(--blue-500);
+  border: 1px solid var(--blue-500);
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}

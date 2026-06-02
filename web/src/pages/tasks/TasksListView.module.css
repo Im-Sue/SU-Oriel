@@ -1,0 +1,164 @@
+.table {
+  width: 100%;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-sm);
+  overflow: hidden;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: 600;
+  color: var(--gray-700);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.table thead th:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+}
+
+.table tbody tr {
+  cursor: pointer;
+  transition: background 80ms;
+}
+
+.table tbody tr:hover {
+  background: var(--blue-50);
+}
+
+.table tbody tr:focus-visible {
+  outline: 2px solid var(--blue-500);
+  outline-offset: -2px;
+}
+
+.table tbody tr[data-kind="epic"] {
+  background: linear-gradient(90deg, var(--purple-50, #faf5ff), white 8%);
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--gray-100);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.headTitle      { width: auto; }
+.headKind       { width: 80px; }
+.headParent     { width: 200px; }
+.headNode       { width: 140px; }
+.headPriority   { width: 90px; }
+.headProgress   { width: 140px; }
+.headUpdated    { width: 100px; }
+
+.cellTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  color: var(--gray-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+}
+
+.taskKey {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+.parentEpic {
+  font-size: 11px;
+  color: var(--gray-600);
+  background: var(--gray-50);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--gray-400);
+}
+
+.cellPriority {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--gray-700);
+}
+
+.priorityDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.priorityDot[data-priority="urgent"] { background: var(--red-500, #ef4444); }
+.priorityDot[data-priority="high"]   { background: var(--orange-500, #f97316); }
+.priorityDot[data-priority="medium"] { background: var(--blue-500, #3b82f6); }
+.priorityDot[data-priority="low"]    { background: var(--gray-400, #9ca3af); }
+
+.cellProgress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progressTrack {
+  flex: 1 1 auto;
+  height: 6px;
+  background: var(--gray-200);
+  border-radius: 999px;
+  overflow: hidden;
+  max-width: 80px;
+}
+
+.progressBar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue-500), var(--blue-600));
+  border-radius: 999px;
+  transition: width 200ms ease-out;
+}
+
+.progressText {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-700);
+  min-width: 32px;
+  text-align: right;
+}
+
+.cellUpdated {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  white-space: nowrap;
+}

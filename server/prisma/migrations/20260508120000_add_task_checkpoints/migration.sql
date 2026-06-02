@@ -1,0 +1,3 @@
+CREATE TABLE "task_checkpoints" ("id" TEXT NOT NULL PRIMARY KEY, "task_id" TEXT NOT NULL, "task_key" TEXT NOT NULL, "transition_id" TEXT NOT NULL, "node_before" TEXT, "node_after" TEXT, "state_revision_after" INTEGER NOT NULL, "state_hash" TEXT NOT NULL, "snapshot_inline" TEXT, "snapshot_path" TEXT, "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "task_checkpoints_task_id_fkey" FOREIGN KEY ("task_id") REFERENCES "Task" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+CREATE UNIQUE INDEX "task_checkpoints_task_id_transition_id_key" ON "task_checkpoints"("task_id", "transition_id");
+CREATE INDEX "task_checkpoints_task_id_created_at_idx" ON "task_checkpoints"("task_id", "created_at");

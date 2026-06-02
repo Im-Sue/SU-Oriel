@@ -1,0 +1,122 @@
+.surface {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #1f2940;
+  border-radius: var(--radius-md);
+  background: #0b1020;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 10px;
+  color: #cbd5e1;
+  background: #131a30;
+  font-size: var(--text-xs);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.statusDot[data-status="open"] {
+  background: var(--green-500);
+}
+
+.statusDot[data-status="closed"],
+.statusDot[data-status="error"] {
+  background: #ef4444;
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fca5a5;
+}
+
+.terminalHost {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  /* 横向：tmux pane 列数（renderer 按 frame.cols resize）常宽于右栏，需横向滚动条看全。 */
+  overflow-x: auto;
+  /* 纵向：滚动主权交给 xterm 自身 viewport，保持单一纵向滚动条（B+ 目标）。 */
+  overflow-y: hidden;
+  padding: 8px;
+  box-sizing: border-box;
+  background: #0b1020;
+}
+
+.terminalHost :global(.xterm) {
+  /* 按内容宽度撑开（可宽于 host → 触发 host 横向滚动）；窄于 host 时由 min-width 兜满。 */
+  display: inline-block;
+  min-width: 100%;
+  width: auto;
+  /* 填满 host 高度，使纵向 scrollback 由 xterm viewport 承载，而非 host。 */
+  height: 100%;
+}
+
+.terminalHost :global(.xterm-viewport) {
+  background-color: transparent !important;
+  /* xterm 默认 overflow-y:scroll 永久占位：当 host 高于 frame.rows 实际行数时，
+     会在底部空白区残留一根无内容可滚的死滚动条。改 auto → 仅有可滚历史时才出现。 */
+  overflow-y: auto !important;
+}
+
+.menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: #131a30;
+  border: 1px solid #283454;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: var(--text-xs);
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: #1f2940;
+}
+
+.menuItem:disabled {
+  color: #64748b;
+  cursor: default;
+}

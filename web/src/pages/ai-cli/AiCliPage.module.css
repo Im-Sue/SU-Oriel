@@ -1,0 +1,388 @@
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+.banner {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+}
+
+.bannerIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--gray-500);
+}
+
+.bannerBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bannerTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--gray-900);
+  letter-spacing: -0.005em;
+}
+
+.bannerSubtitle {
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--gray-600);
+}
+
+.bannerSubtitle strong {
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerTitle {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.headerMeta {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+}
+
+.headerActions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.toolCard {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  padding: 16px;
+}
+
+.toolHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolName {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.toolBadge {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+}
+
+.toolBadge[data-available="false"] {
+  color: var(--orange-500, #f97316);
+}
+
+.toolMeta {
+  font-size: var(--text-xs);
+  color: var(--gray-600);
+  word-break: break-all;
+}
+
+.toolActions {
+  display: flex;
+  gap: 8px;
+}
+
+.embeddedLayout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  /* 给嵌入区一个固定高度，避免 xterm.js 内容反向撑大整页（无限增高 bug） */
+  height: clamp(480px, calc(100vh - 240px), 900px);
+  min-width: 0;
+}
+
+.toolColumn {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.toolColumnTitle {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.toolColumnButton {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.toolColumnButton[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.toolColumnButton:hover:not([disabled]) {
+  border-color: var(--green-500);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.toolColumnLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.toolColumnHint {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+}
+
+.terminalArea {
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.tabsRow {
+  display: flex;
+  align-items: stretch;
+  background: var(--gray-100);
+  border-bottom: 1px solid var(--gray-200);
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+  color: var(--gray-600);
+  font-size: var(--text-xs);
+  border-right: 1px solid var(--gray-200);
+}
+
+.tab[data-active="true"] {
+  background: #ffffff;
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
+.tabClose {
+  cursor: pointer;
+  padding: 0 4px;
+  color: var(--gray-400);
+  background: transparent;
+}
+
+.tabClose:hover {
+  color: var(--orange-500, #f97316);
+}
+
+.tabPlaceholder {
+  align-self: center;
+  margin-left: 16px;
+  color: var(--gray-500);
+  font-size: var(--text-xs);
+}
+
+.terminalHost {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.terminalEmpty {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--gray-500);
+  font-size: var(--text-sm);
+}
+
+/* ---- tabs 模式：所有 panel 叠在一起，按 active 切换可见 ---- */
+.terminalPanel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.terminalPanel[data-active="false"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---- grid 模式：N 列网格同时渲染所有 session ---- */
+.terminalGrid {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+  align-content: start;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 关键：grid-auto-rows 用 1fr 没有上界时会被内容撑大 →
+   xterm 反向把外层撑高 → ResizeObserver 死循环。
+   改成基于行数计算的固定高度，并按可见会话数动态调整。 */
+.terminalGrid[data-cols="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.terminalGrid[data-cols="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+/* 只有一个 session 时撑满整行，避免一个孤零零的小窗口 */
+.terminalGrid[data-cols="2"][data-count="1"],
+.terminalGrid[data-cols="3"][data-count="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gridCell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.gridCell[data-active="true"] {
+  outline: 2px solid var(--green-500);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
+
+.layoutSwitcher {
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--gray-100);
+  padding: 2px;
+}
+
+.layoutItem {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--gray-600);
+  font-size: var(--text-xs);
+}
+
+.layoutItem[data-active="true"] {
+  background: #ffffff;
+  color: var(--gray-900);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.recordingsSection {
+  display: grid;
+  gap: 12px;
+}
+
+.recordingsTitle {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.recordingsList {
+  display: grid;
+  gap: 8px;
+}
+
+.recordingRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  padding: 10px 14px;
+}
+
+.recordingMain {
+  display: grid;
+  gap: 4px;
+}
+
+.recordingTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.recordingMeta {
+  font-size: var(--text-xs);
+  color: var(--gray-500);
+  word-break: break-all;
+}
+
+.recordingEmpty {
+  border: 1px dashed var(--gray-300);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  color: var(--gray-500);
+  font-size: var(--text-sm);
+  text-align: center;
+}

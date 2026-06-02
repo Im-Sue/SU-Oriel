@@ -1,0 +1,225 @@
+.sidebar {
+  display: flex;
+  height: 100%;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 0;
+  color: var(--sidebar-text);
+}
+
+.brandRow {
+  display: flex;
+  height: 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.brandMark {
+  color: var(--cc-color-bg-surface);
+  font-size: 20px;
+}
+
+.brandText {
+  flex: 1;
+  color: var(--cc-color-bg-surface);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.collapseButton {
+  cursor: pointer;
+  color: var(--sidebar-text-hover);
+  font-size: 18px;
+}
+
+.projectArea {
+  position: relative;
+  padding: 16px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.projectTrigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  background: var(--sidebar-active-bg);
+  padding: 10px 12px;
+  color: var(--sidebar-text-hover);
+}
+
+.projectMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.projectName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.projectPath {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--sidebar-text);
+}
+
+.projectArrow {
+  font-size: var(--text-sm);
+}
+
+.projectPopover {
+  position: absolute;
+  top: calc(100% - 8px);
+  left: 16px;
+  right: 16px;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--cc-color-gray-800);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-gray-900);
+  padding: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.projectSearch {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 8px 10px;
+  color: var(--cc-color-bg-surface);
+}
+
+.projectList {
+  display: grid;
+  gap: 8px;
+}
+
+.projectItem {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--cc-color-gray-100);
+}
+
+.projectItem[data-selected="true"] {
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.projectItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.projectItemTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.projectItemPath {
+  font-size: var(--text-xs);
+  color: var(--cc-color-gray-400);
+}
+
+.emptyHint {
+  font-size: var(--text-xs);
+  color: var(--cc-color-gray-400);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.navSectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--cc-color-gray-500, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 12px 4px 12px;
+}
+
+.navSectionDivider {
+  height: 1px;
+  background: var(--cc-color-gray-200, #e5e7eb);
+  margin: 6px 8px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--sidebar-text);
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.navItem:hover {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-text-hover);
+}
+
+.navItemActive {
+  border-left-color: var(--cc-color-green-500);
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+}
+
+.navIcon {
+  width: 16px;
+  text-align: center;
+}
+
+.navLabel {
+  min-width: 0;
+}
+
+.navBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.footer {
+  display: grid;
+  gap: 8px;
+  padding: 12px 10px 16px;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+.settingsPlaceholder {
+  padding: 6px 10px;
+  color: var(--cc-color-gray-500);
+  font-size: var(--text-xs);
+}

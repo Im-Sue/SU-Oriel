@@ -1,0 +1,181 @@
+.panel {
+  background: var(--amber-50);
+  border: 1px solid var(--amber-400);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: linear-gradient(180deg, var(--amber-50), var(--amber-50));
+  border-bottom: 1px solid var(--amber-400);
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  width: 100%;
+  text-align: left;
+}
+
+.header:hover {
+  background: var(--amber-100);
+}
+
+.expandIcon {
+  color: var(--gray-700);
+  font-size: 12px;
+  display: inline-block;
+  width: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--amber-800);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--amber-700);
+  font-weight: normal;
+}
+
+.count {
+  font-size: var(--text-xs);
+  color: var(--amber-800);
+  margin-left: auto;
+  margin-right: var(--space-2);
+  font-weight: 600;
+}
+
+.batchBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.batchHint {
+  font-size: 11px;
+  color: var(--gray-600);
+}
+
+.batchButton {
+  background: var(--amber-700);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.batchButton:hover:not(:disabled) {
+  background: var(--amber-800);
+}
+
+.batchButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: white;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--gray-100);
+}
+
+.item:first-child {
+  border-top: none;
+}
+
+.categoryBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.categoryBadge[data-color="amber"] { background: var(--amber-50); color: var(--amber-700); border: 1px solid var(--amber-400); }
+.categoryBadge[data-color="yellow"] { background: var(--yellow-50); color: var(--yellow-700); border: 1px solid var(--yellow-500); }
+.categoryBadge[data-color="red"]    { background: var(--red-50); color: var(--red-600); border: 1px solid var(--red-400); }
+
+.taskTitle {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--gray-900);
+  font-weight: 500;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTitle:hover {
+  color: var(--blue-600);
+  text-decoration: underline;
+}
+
+.currentState {
+  font-size: 11px;
+  color: var(--gray-600);
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.repairButton {
+  flex-shrink: 0;
+  background: var(--blue-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.repairButton:hover:not(:disabled) {
+  background: var(--blue-700);
+}
+
+.repairButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.repairButton[data-manual="true"] {
+  background: var(--gray-200);
+  color: var(--gray-600);
+}

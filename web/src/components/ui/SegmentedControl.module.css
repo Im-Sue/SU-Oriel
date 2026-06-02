@@ -1,0 +1,22 @@
+.container {
+  display: inline-flex;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--gray-100);
+  padding: 2px;
+}
+
+.item {
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--gray-600);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.active {
+  background: #ffffff;
+  color: var(--gray-800);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}

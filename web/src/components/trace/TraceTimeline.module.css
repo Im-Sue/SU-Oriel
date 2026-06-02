@@ -1,0 +1,144 @@
+.root {
+  display: grid;
+  gap: var(--cc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sm {
+  font-size: var(--cc-text-size-xs);
+}
+
+.md {
+  font-size: var(--cc-text-size-sm);
+}
+
+.lg {
+  font-size: var(--cc-text-size-base);
+}
+
+.default {
+  color: var(--cc-color-text-primary);
+}
+
+.success {
+  color: var(--cc-color-accent-primary);
+}
+
+.warn {
+  color: var(--cc-trace-event-warn);
+}
+
+.danger {
+  color: var(--cc-trace-event-error);
+}
+
+.item {
+  position: relative;
+  padding-inline-start: var(--cc-space-6);
+}
+
+.item::before {
+  position: absolute;
+  inset-block: 18px -18px;
+  inset-inline-start: 7px;
+  inline-size: 2px;
+  background: var(--cc-trace-rail-color);
+  content: "";
+}
+
+.item:last-child::before {
+  display: none;
+}
+
+.railMarker {
+  position: absolute;
+  inset-block-start: 18px;
+  inset-inline-start: 0;
+  inline-size: 16px;
+  block-size: 16px;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: var(--cc-trace-event-system);
+  box-shadow: var(--cc-shadow-sm);
+}
+
+.item[data-sender="claude"] .railMarker {
+  background: var(--cc-trace-event-claude);
+}
+
+.item[data-sender="codex"] .railMarker {
+  background: var(--cc-trace-event-codex);
+}
+
+.item[data-sender="error"] .railMarker {
+  background: var(--cc-trace-event-error);
+}
+
+.item[data-sender="warn"] .railMarker {
+  background: var(--cc-trace-event-warn);
+}
+
+.card {
+  display: grid;
+  gap: var(--cc-space-2);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cc-space-3);
+}
+
+.route {
+  margin: 0;
+  color: var(--cc-color-text-muted);
+  font-size: var(--cc-text-size-xs);
+  text-transform: uppercase;
+}
+
+.intent {
+  margin: 2px 0 0;
+  color: var(--cc-color-text-primary);
+  font-size: var(--cc-text-size-base);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.toggle {
+  cursor: pointer;
+  border: 1px solid var(--cc-color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--cc-color-bg-surface);
+  color: var(--cc-color-text-secondary);
+  font-size: var(--cc-text-size-xs);
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.toggle:hover {
+  border-color: var(--cc-color-border-strong);
+  background: var(--cc-color-bg-muted);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cc-space-2);
+  color: var(--cc-color-text-muted);
+  font-size: var(--cc-text-size-xs);
+}
+
+.payload {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  background: var(--cc-color-bg-muted);
+  color: var(--cc-color-text-secondary);
+  font-family: var(--cc-text-font-mono);
+  font-size: var(--cc-text-size-xs);
+  line-height: var(--cc-text-line-base);
+  padding: var(--cc-space-3);
+  white-space: pre-wrap;
+}

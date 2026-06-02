@@ -1,0 +1,64 @@
+.root {
+  display: grid;
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hint {
+  color: var(--gray-500);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.editor :global(.EasyMDEContainer) {
+  border-radius: var(--radius-md);
+}
+
+.editor :global(.CodeMirror) {
+  height: auto;
+  min-height: 360px;
+  border-color: var(--gray-200);
+  color: var(--gray-800);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.editor :global(.CodeMirror-scroll) {
+  max-height: 60vh;
+}
+
+.editor :global(.CodeMirror-fullscreen .CodeMirror-scroll) {
+  max-height: none;
+}
+
+.editor :global(.editor-toolbar) {
+  flex-wrap: wrap;
+}
+
+.editor :global(.editor-preview),
+.editor :global(.editor-preview-side) {
+  background: #ffffff;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.editor :global(.editor-toolbar) {
+  border-color: var(--gray-200);
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
