@@ -47,6 +47,11 @@ export interface RequirementMarkdownRecord {
   content: string;
 }
 
+export interface RequirementMarkdownBody {
+  path: string;
+  content: string;
+}
+
 export function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
@@ -95,7 +100,7 @@ export async function findRequirementMarkdown(projectRoot: string, requirementId
   throw new RequirementEditNotFoundError("需求 md 文件不存在");
 }
 
-function extractMarkdownBody(content: string): string {
+export function extractMarkdownBody(content: string): string {
   const matched = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?([\s\S]*)$/);
   return matched ? matched[1] : content;
 }
@@ -201,6 +206,25 @@ export async function loadRequirementMdHash(
   }
   const md = await findRequirementMarkdown(requirement.project.localPath, requirement.id);
   return sha256(md.content);
+}
+
+export async function loadRequirementMarkdownBody(
+  prisma: PrismaClient,
+  projectId: string,
+  requirementId: string
+): Promise<RequirementMarkdownBody> {
+  const requirement = await prisma.requirement.findFirst({
+    where: { id: requirementId, projectId },
+    include: { project: true }
+  });
+  if (!requirement) {
+    throw new RequirementEditNotFoundError();
+  }
+  const md = await findRequirementMarkdown(requirement.project.localPath, requirement.id);
+  return {
+    path: md.relativePath,
+    content: extractMarkdownBody(md.content)
+  };
 }
 
 export async function editRequirement(

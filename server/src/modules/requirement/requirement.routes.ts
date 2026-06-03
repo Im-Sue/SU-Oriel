@@ -14,6 +14,7 @@ import {
   RequirementEditNotFoundError,
   RequirementEditStatusConflictError,
   editRequirement,
+  loadRequirementMarkdownBody,
   loadRequirementMdHash
 } from "./requirement-edit.service.js";
 import { createRequirementSchema, editRequirementSchema } from "./requirement.schemas.js";
@@ -145,6 +146,22 @@ export async function registerRequirementRoutes(
       ...serializeRequirement(requirement),
       mdHash
     };
+  });
+
+  app.get("/api/projects/:projectId/requirements/:requirementId/markdown", async (request, reply) => {
+    const { projectId, requirementId } = request.params as { projectId: string; requirementId: string };
+
+    try {
+      return await loadRequirementMarkdownBody(prisma, projectId, requirementId);
+    } catch (error) {
+      if (error instanceof RequirementEditNotFoundError) {
+        reply.status(404);
+        return {
+          message: error.message
+        };
+      }
+      throw error;
+    }
   });
 
   app.post("/api/projects/:projectId/requirements/:assetOwner/assets", async (request, reply) => {

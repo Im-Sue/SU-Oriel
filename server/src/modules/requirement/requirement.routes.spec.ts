@@ -11,6 +11,7 @@ import { buildApp } from "../../app.js";
 import { prisma } from "../../db/prisma.js";
 import { scanProject } from "../../indexer/project-indexer.js";
 import { PrismaProjectStore } from "../project/project.store.prisma.js";
+import { extractMarkdownBody } from "./requirement-edit.service.js";
 
 async function resetDatabase(): Promise<void> {
   await prisma.syncJob.deleteMany();
@@ -58,6 +59,22 @@ async function readHash(filePath: string): Promise<string> {
 function analysisHash(title: string, description: string): string {
   return createHash("sha256").update(`${title}${description}`, "utf8").digest("hex");
 }
+
+test("extractMarkdownBody removes frontmatter and preserves markdown body", () => {
+  const content = [
+    "---",
+    "title: Hidden",
+    "doc_type: requirement",
+    "---",
+    "",
+    "## 需求描述",
+    "",
+    "正文"
+  ].join("\n");
+
+  assert.equal(extractMarkdownBody(content), "\n## 需求描述\n\n正文");
+  assert.equal(extractMarkdownBody("## 无 frontmatter\n\n正文"), "## 无 frontmatter\n\n正文");
+});
 
 function buildMultipartPayload(file: Buffer, mimeType: string, filename: string) {
   const boundary = `----ccb-${randomUUID()}`;
@@ -349,6 +366,88 @@ test("GET /api/projects/:projectId/requirements/:requirementId returns serialize
 
   await app.close();
   await rm(localPath, { recursive: true, force: true });
+});
+
+test("GET /api/projects/:projectId/requirements/:requirementId/markdown returns body-only markdown", async () => {
+  const app = buildApp({
+    projectStore: new PrismaProjectStore(prisma),
+    enableFileWatcher: false
+  });
+  const { project, localPath } = await createProjectFixture("Requirement markdown body GET");
+  const created = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/requirements`,
+    payload: {
+      title: "Markdown body target",
+      description: "完整需求描述",
+      outputMode: "requirement_only",
+      splitMode: "direct_pr",
+      verbatim_source: "用户原话"
+    }
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const requirementId = created.json().id as string;
+  const mdPath = await findRequirementMarkdown(localPath);
+  const expectedContent = extractMarkdownBody(await readFile(mdPath, "utf8"));
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/api/projects/${project.id}/requirements/${requirementId}/markdown`
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  const body = response.json();
+  assert.match(body.path, /^docs\/02_需求设计\/.+\.md$/);
+  assert.equal(body.content, expectedContent);
+  assert.doesNotMatch(body.content, /^---/);
+  assert.doesNotMatch(body.content, /doc_type: requirement/);
+  assert.match(body.content, /## 需求描述/);
+  assert.match(body.content, /完整需求描述/);
+  assert.match(body.content, /## 原话（verbatim）/);
+  assert.match(body.content, /用户原话/);
+
+  await app.close();
+  await rm(localPath, { recursive: true, force: true });
+});
+
+test("GET /api/projects/:projectId/requirements/:requirementId/markdown returns 404 for wrong project or missing md", async () => {
+  const app = buildApp({
+    projectStore: new PrismaProjectStore(prisma),
+    enableFileWatcher: false
+  });
+  const first = await createProjectFixture("Requirement markdown wrong project");
+  const second = await createProjectFixture("Requirement markdown other project");
+  const created = await app.inject({
+    method: "POST",
+    url: `/api/projects/${first.project.id}/requirements`,
+    payload: {
+      title: "Markdown missing target",
+      description: "正文",
+      outputMode: "requirement_only"
+    }
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const requirementId = created.json().id as string;
+
+  const wrongProject = await app.inject({
+    method: "GET",
+    url: `/api/projects/${second.project.id}/requirements/${requirementId}/markdown`
+  });
+  assert.equal(wrongProject.statusCode, 404, wrongProject.body);
+  assert.match(wrongProject.json().message, /需求不存在/);
+
+  const mdPath = await findRequirementMarkdown(first.localPath);
+  await rm(mdPath, { force: true });
+  const missingMd = await app.inject({
+    method: "GET",
+    url: `/api/projects/${first.project.id}/requirements/${requirementId}/markdown`
+  });
+  assert.equal(missingMd.statusCode, 404, missingMd.body);
+  assert.match(missingMd.json().message, /需求 md 文件不存在/);
+
+  await app.close();
+  await rm(first.localPath, { recursive: true, force: true });
+  await rm(second.localPath, { recursive: true, force: true });
 });
 
 test("PATCH /api/projects/:projectId/requirements/:requirementId edits md first, syncs DB, and writes audit", async () => {
