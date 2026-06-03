@@ -254,6 +254,21 @@ export async function fetchDocumentDetail(documentId: string): Promise<DocumentD
   return await requestJson<DocumentDetailView>(`/api/documents/${documentId}`, "加载文档详情失败");
 }
 
+export interface RequirementMarkdownView {
+  path: string;
+  content: string;
+}
+
+export async function fetchRequirementMarkdown(
+  projectId: string,
+  requirementId: string
+): Promise<RequirementMarkdownView> {
+  return await requestJson<RequirementMarkdownView>(
+    `/api/projects/${projectId}/requirements/${requirementId}/markdown`,
+    "加载需求文档失败"
+  );
+}
+
 export async function fetchTasks(projectId: string): Promise<TaskView[]> {
   const payload = await requestJson<ApiListResponse<TaskView>>(`/api/projects/${projectId}/tasks`, "加载任务列表失败");
   return payload.items;

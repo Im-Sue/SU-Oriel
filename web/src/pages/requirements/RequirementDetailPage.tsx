@@ -5,7 +5,6 @@ import styles from "./RequirementDetailPage.module.css";
 import { RequirementMarkdownEditor } from "../../components/requirements/RequirementMarkdownEditor.js";
 import { MarkdownViewer } from "../../components/shared/MarkdownViewer.js";
 import { SlotPanelActions, SlotTerminalPanel } from "../../components/slot-terminal/SlotTerminalPanel.js";
-import { DetailDrawer } from "../../components/task-detail-v2/DetailDrawer.js";
 import { Badge } from "../../components/ui/Badge.js";
 import { Button } from "../../components/ui/Button.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
@@ -20,6 +19,7 @@ import {
   fetchDocumentDetail,
   fetchEventJournalEvents,
   fetchRequirementDetail,
+  fetchRequirementMarkdown,
   fetchSlots,
   fetchSubtaskBatchCandidates,
   fetchTasks,
@@ -42,8 +42,15 @@ import type { SubtaskBatchCandidateView, TaskView } from "../../types/task.js";
 
 const TERMINAL_STATUSES = new Set(["delivered", "cancelled"]);
 
-type ArtifactDrawer = "ai" | "design" | null;
+type ArtifactModal = "ai" | "design" | null;
 type DocumentModalMode = "read" | "edit" | null;
+type RequirementMarkdownStatus = "idle" | "loading" | "ready" | "empty" | "not-found" | "error";
+
+interface RequirementMarkdownState {
+  status: RequirementMarkdownStatus;
+  content?: string;
+  message?: string;
+}
 type DesignDocumentStatus = "idle" | "loading" | "ready" | "not-indexed" | "stale" | "not-found" | "error" | "empty";
 
 interface DesignDocumentState {
@@ -132,14 +139,6 @@ function createExcerpt(markdown: string, maxLength = 220): string {
   return `${trimmed.slice(0, maxLength).trimEnd()}...`;
 }
 
-function buildAiMarkdown(requirement: RequirementDetailView): string {
-  return [
-    `## Claude 解读\n\n${requirement.claudeInterpretation || "等待 AI 解析。"}`,
-    `## 歧义点\n\n${requirement.ambiguities || "暂无记录。"}`,
-    `## 保真差异\n\n${requirement.fidelityDiff || "暂无记录。"}`
-  ].join("\n\n");
-}
-
 function normalizeDocumentPath(path: string): string {
   let normalized = path.trim().replace(/\\/g, "/");
   while (normalized.startsWith("./")) {
@@ -199,6 +198,27 @@ function renderDesignDocumentContent(state: DesignDocumentState): ReactNode {
       return <DesignDocumentFallback title="技术设计文档正文为空" description={state.path} />;
     case "idle":
       return <DesignDocumentFallback title="技术设计尚未生成。" />;
+  }
+}
+
+function renderRequirementMarkdownContent(state: RequirementMarkdownState, projectId: string | null): ReactNode {
+  switch (state.status) {
+    case "loading":
+      return <DesignDocumentFallback title="正在加载需求文档..." />;
+    case "ready":
+      return (
+        <div className={styles.markdownSurface}>
+          <MarkdownViewer content={rewriteRequirementAssetUrls(state.content ?? "", projectId ?? "")} />
+        </div>
+      );
+    case "empty":
+      return <DesignDocumentFallback title="需求文档正文为空" />;
+    case "not-found":
+      return <DesignDocumentFallback title="需求文档不存在或已被删除" />;
+    case "error":
+      return <DesignDocumentFallback title={state.message ?? "读取需求文档失败"} />;
+    case "idle":
+      return null;
   }
 }
 
@@ -294,7 +314,7 @@ export function RequirementDetailPage() {
   const [subtasks, setSubtasks] = useState<TaskView[]>([]);
   const [loading, setLoading] = useState(true);
   const [documentModal, setDocumentModal] = useState<DocumentModalMode>(null);
-  const [drawer, setDrawer] = useState<ArtifactDrawer>(null);
+  const [artifactModal, setArtifactModal] = useState<ArtifactModal>(null);
   const [subtasksExpanded, setSubtasksExpanded] = useState(false);
   const [editDraft, setEditDraft] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
@@ -310,6 +330,7 @@ export function RequirementDetailPage() {
   const [requirementSlot, setRequirementSlot] = useState<SlotLaneView | null>(null);
   const [slotReleaseDraft, setSlotReleaseDraft] = useState<SlotReleaseDraft | null>(null);
   const [designDocumentState, setDesignDocumentState] = useState<DesignDocumentState>({ status: "idle" });
+  const [aiMarkdownState, setAiMarkdownState] = useState<RequirementMarkdownState>({ status: "idle" });
   const [slotLoading, setSlotLoading] = useState(false);
   const [slotAction, setSlotAction] = useState<"bind" | "release" | null>(null);
   const isFetchingRef = useRef(false);
@@ -317,6 +338,7 @@ export function RequirementDetailPage() {
   const pendingDispatchesRef = useRef<PendingAnchorDispatch[]>([]);
   const designDocumentRequestRef = useRef<DesignDocumentRequest | null>(null);
   const designDocumentRequestSeqRef = useRef(0);
+  const aiMarkdownRequestSeqRef = useRef(0);
 
   useEffect(() => {
     pendingDispatchesRef.current = pendingDispatches;
@@ -448,7 +470,7 @@ export function RequirementDetailPage() {
   }, [loadDetail, reconcilePendingDispatches, requirementId, selectedProjectId]);
 
   useEffect(() => {
-    if (drawer !== "design") {
+    if (artifactModal !== "design") {
       designDocumentRequestRef.current = null;
       setDesignDocumentState({ status: "idle" });
       return undefined;
@@ -537,7 +559,43 @@ export function RequirementDetailPage() {
         designDocumentRequestRef.current = null;
       }
     };
-  }, [documents, drawer, requirement?.planDocPath, selectedProjectId]);
+  }, [documents, artifactModal, requirement?.planDocPath, selectedProjectId]);
+
+  useEffect(() => {
+    if (artifactModal !== "ai") {
+      aiMarkdownRequestSeqRef.current += 1;
+      setAiMarkdownState({ status: "idle" });
+      return;
+    }
+    if (!selectedProjectId || !requirementId) {
+      setAiMarkdownState({ status: "error", message: "请先选择项目" });
+      return;
+    }
+    const requestId = aiMarkdownRequestSeqRef.current + 1;
+    aiMarkdownRequestSeqRef.current = requestId;
+    setAiMarkdownState({ status: "loading" });
+    void fetchRequirementMarkdown(selectedProjectId, requirementId)
+      .then((result) => {
+        if (aiMarkdownRequestSeqRef.current !== requestId) return;
+        const body = (result.content ?? "").trim();
+        if (body.length === 0) {
+          setAiMarkdownState({ status: "empty" });
+          return;
+        }
+        setAiMarkdownState({ status: "ready", content: result.content });
+      })
+      .catch((error) => {
+        if (aiMarkdownRequestSeqRef.current !== requestId) return;
+        if (error instanceof ConsoleApiError && error.status === 404) {
+          setAiMarkdownState({ status: "not-found" });
+          return;
+        }
+        setAiMarkdownState({
+          status: "error",
+          message: `读取需求文档失败：${error instanceof Error ? error.message : "未知错误"}`
+        });
+      });
+  }, [artifactModal, selectedProjectId, requirementId, requirement?.mdHash]);
 
   useEffect(() => {
     void reindexAndRefresh();
@@ -896,7 +954,7 @@ export function RequirementDetailPage() {
               <ArtifactCard
                 action={
                   <div className={styles.actionGroup}>
-                    {aiHasAnalysis ? <Button onClick={() => setDrawer("ai")} size="sm" variant="secondary">📖 阅读解读</Button> : null}
+                    {aiHasAnalysis ? <Button onClick={() => setArtifactModal("ai")} size="sm" variant="secondary">📖 阅读解读</Button> : null}
                     <Button
                       disabled={terminal || Boolean(planningSubmittingStep)}
                       onClick={() => void handleDispatchPlanningCommand({ command: "su-flow", step: "analysis" })}
@@ -918,7 +976,7 @@ export function RequirementDetailPage() {
               <ArtifactCard
                 action={
                   <div className={styles.actionGroup}>
-                    {designReady ? <Button onClick={() => setDrawer("design")} size="sm" variant="secondary">📖 阅读设计</Button> : null}
+                    {designReady ? <Button onClick={() => setArtifactModal("design")} size="sm" variant="secondary">📖 阅读设计</Button> : null}
                     <Button
                       disabled={terminal || Boolean(planningSubmittingStep)}
                       onClick={() => void handleDispatchPlanningCommand({ command: "su-flow", step: "design" })}
@@ -1220,13 +1278,23 @@ export function RequirementDetailPage() {
         ) : null}
       </Modal>
 
-      <DetailDrawer isOpen={drawer === "ai"} onClose={() => setDrawer(null)} title="AI 解析" width={540}>
-        <MarkdownViewer content={buildAiMarkdown(requirement)} />
-      </DetailDrawer>
+      <Modal
+        onClose={() => setArtifactModal(null)}
+        open={artifactModal === "ai"}
+        size="reader"
+        title="AI 解析 · 需求文档"
+      >
+        {renderRequirementMarkdownContent(aiMarkdownState, selectedProjectId)}
+      </Modal>
 
-      <DetailDrawer isOpen={drawer === "design"} onClose={() => setDrawer(null)} title="技术设计" width={540}>
+      <Modal
+        onClose={() => setArtifactModal(null)}
+        open={artifactModal === "design"}
+        size="reader"
+        title="技术设计"
+      >
         {renderDesignDocumentContent(designDocumentState)}
-      </DetailDrawer>
+      </Modal>
     </main>
   );
 }

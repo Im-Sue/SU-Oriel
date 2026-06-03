@@ -25,6 +25,7 @@ vi.mock("../../lib/console-api.js", () => ({
   fetchEventJournalEvents: vi.fn(),
   fetchRequirementAggregation: vi.fn().mockResolvedValue(null),
   fetchRequirementDetail: vi.fn(),
+  fetchRequirementMarkdown: vi.fn(),
   fetchSlots: vi.fn(),
   fetchSubtaskBatchCandidates: vi.fn(),
   fetchTasks: vi.fn().mockResolvedValue([]),
@@ -232,6 +233,11 @@ describe("RequirementDetailPage 极简详情页", () => {
     vi.mocked(consoleApi.fetchSubtaskBatchCandidates).mockResolvedValue({ candidates: [] });
     vi.mocked(consoleApi.fetchDocumentDetail).mockReset();
     vi.mocked(consoleApi.fetchDocumentDetail).mockResolvedValue(buildDocumentDetail());
+    vi.mocked(consoleApi.fetchRequirementMarkdown).mockReset();
+    vi.mocked(consoleApi.fetchRequirementMarkdown).mockResolvedValue({
+      path: "docs/02_需求设计/req.md",
+      content: "# 完整需求文档\n\n需求正文内容"
+    });
     vi.mocked(consoleApi.fetchEventJournalEvents).mockReset();
     vi.mocked(consoleApi.fetchEventJournalEvents).mockResolvedValue({ items: [], pageInfo: { limit: 20, offset: 0, count: 0 } });
     vi.mocked(consoleApi.fetchRequirementDetail).mockReset();
@@ -508,27 +514,67 @@ describe("RequirementDetailPage 极简详情页", () => {
     expect(within(slotRegion).getByRole("link", { name: "打开 Slots" })).toHaveAttribute("href", "/slots");
   });
 
-  it("opens and closes the AI analysis drawer", async () => {
+  it("opens the AI analysis modal with the full requirement document and closes it", async () => {
     vi.mocked(consoleApi.fetchRequirementDetail).mockResolvedValue(buildRequirement());
+    vi.mocked(consoleApi.fetchRequirementMarkdown).mockResolvedValue({
+      path: "docs/02_需求设计/req-1.md",
+      content: "# 完整需求文档\n\n需求描述与 AI 解读全文"
+    });
 
     renderPage();
 
     const card = await screen.findByTestId("artifact-ai-analysis");
-    expect(within(card).getByRole("button", { name: "📖 阅读解读" })).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "重新解析" })).toBeInTheDocument();
-
     fireEvent.click(within(card).getByRole("button", { name: "📖 阅读解读" }));
 
-    expect(await screen.findByRole("dialog", { name: "AI 解析" })).toBeInTheDocument();
-    expect(screen.getByText("Claude 解读")).toBeInTheDocument();
-    expect(screen.getByText("旧 AI 解读")).toBeInTheDocument();
-    expect(screen.getByText("歧义点")).toBeInTheDocument();
-    expect(screen.getByText("旧歧义")).toBeInTheDocument();
-    expect(screen.getByText("保真差异")).toBeInTheDocument();
-    expect(screen.getByText("旧保真差异")).toBeInTheDocument();
+    const modal = await screen.findByRole("dialog", { name: "AI 解析 · 需求文档" });
+    expect(consoleApi.fetchRequirementMarkdown).toHaveBeenCalledWith("project-1", "req-1");
+    expect(await within(modal).findByRole("heading", { name: "完整需求文档" })).toBeInTheDocument();
+    expect(within(modal).getByText("需求描述与 AI 解读全文")).toBeInTheDocument();
+
+    fireEvent.click(within(modal).getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("dialog", { name: "AI 解析 · 需求文档" })).toBeNull();
+  });
+
+  it("shows a not-found fallback when the requirement markdown endpoint returns 404", async () => {
+    vi.mocked(consoleApi.fetchRequirementDetail).mockResolvedValue(buildRequirement());
+    vi.mocked(consoleApi.fetchRequirementMarkdown).mockRejectedValue(
+      new consoleApi.ConsoleApiError("Not Found", 404)
+    );
+
+    renderPage();
+
+    const card = await screen.findByTestId("artifact-ai-analysis");
+    fireEvent.click(within(card).getByRole("button", { name: "📖 阅读解读" }));
+
+    const modal = await screen.findByRole("dialog", { name: "AI 解析 · 需求文档" });
+    expect(await within(modal).findByText("需求文档不存在或已被删除")).toBeInTheDocument();
+  });
+
+  it("drops late AI markdown responses after the modal closes", async () => {
+    let resolveLate!: (value: { path: string; content: string }) => void;
+    vi.mocked(consoleApi.fetchRequirementDetail).mockResolvedValue(buildRequirement());
+    vi.mocked(consoleApi.fetchRequirementMarkdown).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLate = resolve;
+      })
+    );
+
+    renderPage();
+
+    const card = await screen.findByTestId("artifact-ai-analysis");
+    fireEvent.click(within(card).getByRole("button", { name: "📖 阅读解读" }));
+    expect(await screen.findByText("正在加载需求文档...")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
-    expect(screen.queryByRole("dialog", { name: "AI 解析" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "AI 解析 · 需求文档" })).toBeNull();
+
+    await act(async () => {
+      resolveLate({ path: "docs/02_需求设计/req-1.md", content: "# 迟到内容" });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole("dialog", { name: "AI 解析 · 需求文档" })).toBeNull();
+    expect(screen.queryByText("迟到内容")).toBeNull();
   });
 
   it("shows only generate action when AI analysis is missing", async () => {
