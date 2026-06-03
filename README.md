@@ -59,6 +59,8 @@ pnpm workspace（`web` + `server`），包名 `su-oriel-web` / `su-oriel-server`
 
 ## 快速开始
 
+> **环境**：仅支持 **WSL 与 macOS**（`node-pty` 等原生模块依赖 Unix；Windows 请在 WSL 内运行）。整套系统的底层桥接运行时见 [SeemSeam/claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge)。
+
 ```bash
 pnpm install
 pnpm --filter su-oriel-server db:prepare   # 首次：准备本地 SQLite DB
