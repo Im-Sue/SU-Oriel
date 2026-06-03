@@ -62,7 +62,6 @@ test("computeSlotTipsProjection includes active requirement bindings sorted by s
   const longTitle = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const activeOne = await createRequirement(projectId, longTitle);
   const activeTwo = await createRequirement(projectId, "中文标题");
-  const idle = await createRequirement(projectId, "Idle Requirement");
   const draining = await createRequirement(projectId, "Draining Requirement");
 
   await prisma.slotBinding.create({
@@ -72,13 +71,7 @@ test("computeSlotTipsProjection includes active requirement bindings sorted by s
     data: { projectId, slotId: "slot-1", requirementId: activeOne.id, state: "bound" }
   });
   await prisma.slotBinding.create({
-    data: { projectId, slotId: "slot-3", requirementId: idle.id, state: "idle" }
-  });
-  await prisma.slotBinding.create({
-    data: { projectId, slotId: "slot-4", requirementId: draining.id, state: "draining" }
-  });
-  await prisma.slotBinding.create({
-    data: { projectId, slotId: "slot-5", state: "recovering" }
+    data: { projectId, slotId: "slot-3", requirementId: draining.id, state: "draining" }
   });
 
   const tips = await computeSlotTipsProjection(prisma, projectId);

@@ -32,7 +32,7 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-test("GET /api/projects/:projectId/slots projects main lane, five slots, queue, stale, and unhealthy badges", async () => {
+test("GET /api/projects/:projectId/slots projects main lane, three slots, queue, stale, and unhealthy badges", async () => {
   const project = await createProject();
   const requirement = await prisma.requirement.create({
     data: {
@@ -139,7 +139,7 @@ test("GET /api/projects/:projectId/slots projects main lane, five slots, queue, 
       state: "available",
       canBindBusiness: false
     });
-    assert.deepEqual(body.slots.map((slot) => slot.slotId), ["slot-1", "slot-2", "slot-3", "slot-4", "slot-5"]);
+    assert.deepEqual(body.slots.map((slot) => slot.slotId), ["slot-1", "slot-2", "slot-3"]);
     assert.equal(body.slots[0].state, "unhealthy");
     assert.deepEqual(body.slots[0].requirement, { id: requirement.id, title: requirement.title });
     assert.equal(body.slots[0].lastActivityAt, "2026-05-10T00:00:00.000Z");
@@ -429,7 +429,7 @@ test("POST requirement bind-slot returns slot full without a 500 when no idle sl
       status: "planning"
     }
   });
-  for (let index = 0; index < 5; index++) {
+  for (let index = 0; index < 3; index++) {
     const requirement = await prisma.requirement.create({
       data: {
         projectId: project.id,

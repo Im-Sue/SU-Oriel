@@ -10,7 +10,7 @@ import {
 } from "./slot-context-reset.service.js";
 import { syncSlotTips } from "./slot-tips-projection.service.js";
 
-export const SLOT_IDS = ["slot-1", "slot-2", "slot-3", "slot-4", "slot-5"] as const;
+export const SLOT_IDS = ["slot-1", "slot-2", "slot-3"] as const;
 export type SlotId = (typeof SLOT_IDS)[number];
 
 export type BindRequirementInput = {

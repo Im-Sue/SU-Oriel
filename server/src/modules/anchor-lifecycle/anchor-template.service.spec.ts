@@ -18,15 +18,17 @@ test("buildAnchorConfig emits managed v7 multi-window slot topology without lega
   const config = buildAnchorConfig();
 
   assert.match(config, /\[windows]/);
-  assert.match(config, /main = "main_claude:claude, main_codex:codex"/);
-  assert.match(config, /slot-5 = "slot5_claude:claude, slot5_codex:codex"/);
+  assert.match(config, /main = "main_claude:claude; main_codex:codex"/);
+  assert.match(config, /slot-3 = "slot3_claude:claude; slot3_codex:codex"/);
   assert.match(config, /\[agents\.main_claude\]/);
-  assert.match(config, /\[agents\.slot5_codex\]/);
+  assert.match(config, /\[agents\.slot3_codex\]/);
+  assert.doesNotMatch(config, /\[agents\.slot4_/);
+  assert.doesNotMatch(config, /\[agents\.slot5_/);
   assert.doesNotMatch(config, /task_auto_/);
   assert.doesNotMatch(config, /^default_agents\s*=/m);
   assert.doesNotMatch(config, /^layout\s*=/m);
   assert.doesNotMatch(config, /^\[ui\.sidebar\.view]$/m);
-  assert.equal((config.match(/workspace_mode = "inplace"/g) ?? []).length, 12);
+  assert.equal((config.match(/workspace_mode = "inplace"/g) ?? []).length, 8);
 });
 
 test("writeAnchorConfig creates .ccb/ccb.config under the anchor root", async () => {
@@ -38,7 +40,9 @@ test("writeAnchorConfig creates .ccb/ccb.config under the anchor root", async ()
   assert.equal(configPath, join(root, ".ccb", "ccb.config"));
   const config = await readFile(configPath, "utf8");
   assert.match(config, /\[agents\.main_claude\]/);
-  assert.match(config, /\[agents\.slot5_codex\]/);
+  assert.match(config, /\[agents\.slot3_codex\]/);
+  assert.doesNotMatch(config, /\[agents\.slot4_/);
+  assert.doesNotMatch(config, /\[agents\.slot5_/);
   assert.doesNotMatch(config, /task_auto_/);
   assert.doesNotMatch(config, /^\[ui\.sidebar\.view]$/m);
 });

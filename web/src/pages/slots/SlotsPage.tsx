@@ -254,7 +254,7 @@ export function SlotsPage() {
           <h1 className={styles.title}>Slot 拓扑</h1>
           <p className={styles.subtitle}>
             {selectedProjectName ? `${selectedProjectName} 的运行窗口` : "当前项目运行窗口"}：main 负责协调，slot-1 到
-            slot-5 承载 requirement 执行与队列调度。
+            slot-3 承载 requirement 执行与队列调度。
           </p>
         </div>
         <dl className={styles.summary}>

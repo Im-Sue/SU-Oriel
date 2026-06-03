@@ -111,25 +111,25 @@ test("SlotBindingService runs the slot-bound callback after commit and keeps bin
   assert.equal(await prisma.slotBinding.count({ where: { projectId: project.id, requirementId: requirements[0].id } }), 1);
 });
 
-test("SlotBindingService queues the sixth active requirement without binding main", async () => {
-  const { project, requirements } = await createProjectWithRequirements(6);
+test("SlotBindingService queues the fourth active requirement without binding main", async () => {
+  const { project, requirements } = await createProjectWithRequirements(4);
   const service = new SlotBindingService(prisma);
 
-  for (const requirement of requirements.slice(0, 5)) {
+  for (const requirement of requirements.slice(0, 3)) {
     const bound = await service.bindRequirement({
       projectId: project.id,
       requirementId: requirement.id
     });
-    assert.match(bound.slotId, /^slot-[1-5]$/);
+    assert.match(bound.slotId, /^slot-[1-3]$/);
   }
   const overflow = await service.bindRequirement({
     projectId: project.id,
-    requirementId: requirements[5].id
+    requirementId: requirements[3].id
   });
 
   assert.equal(overflow, null);
   assert.equal(await prisma.slotBinding.count({ where: { projectId: project.id, slotId: "main" } }), 0);
-  assert.equal(await prisma.slotBinding.count({ where: { projectId: project.id } }), 5);
+  assert.equal(await prisma.slotBinding.count({ where: { projectId: project.id } }), 3);
 });
 
 test("SlotBindingService explicit release drains then idles and emits slot_released", async () => {
@@ -180,7 +180,7 @@ test("SlotBindingService keeps release authoritative when the release callback f
 });
 
 test("SlotBindingService release callback drains the oldest queued requirement into the freed slot", async () => {
-  const { project, requirements } = await createProjectWithRequirements(6);
+  const { project, requirements } = await createProjectWithRequirements(4);
   let router!: JobSlotRouter;
   const service = new SlotBindingService(prisma, {
     onSlotReleased: async ({ projectId }) => {
@@ -189,14 +189,14 @@ test("SlotBindingService release callback drains the oldest queued requirement i
   });
   router = new JobSlotRouter({ prismaClient: prisma, slotBinding: service });
 
-  for (const requirement of requirements.slice(0, 5)) {
+  for (const requirement of requirements.slice(0, 3)) {
     await service.bindRequirement({ projectId: project.id, requirementId: requirement.id });
   }
   const queued = await router.enqueue({
     projectId: project.id,
-    requirementId: requirements[5].id,
+    requirementId: requirements[3].id,
     subjectType: "requirement",
-    subjectId: requirements[5].id,
+    subjectId: requirements[3].id,
     command: "/ccb:su-flow --payload {}"
   });
 
@@ -218,7 +218,7 @@ test("SlotBindingService release callback drains the oldest queued requirement i
       }
     }
   });
-  assert.equal(rebound.requirementId, requirements[5].id);
+  assert.equal(rebound.requirementId, requirements[3].id);
   assert.equal(rebound.state, "bound");
   assert.equal(await prisma.eventJournal.count({ where: { eventType: "slot_queued_request" } }), 1);
 });

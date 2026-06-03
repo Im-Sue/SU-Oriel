@@ -28,12 +28,10 @@ CONFIG_PATH = REPO_ROOT / ".ccb" / "ccb.config"
 EXPECTED_DEFAULT_AGENTS = ["ccb_claude", "ccb_codex"]
 EXPECTED_LAYOUT = "cmd, (ccb_claude:claude; ccb_codex:codex)"
 EXPECTED_WINDOWS = {
-    "main": "main_claude:claude, main_codex:codex",
-    "slot-1": "slot1_claude:claude, slot1_codex:codex",
-    "slot-2": "slot2_claude:claude, slot2_codex:codex",
-    "slot-3": "slot3_claude:claude, slot3_codex:codex",
-    "slot-4": "slot4_claude:claude, slot4_codex:codex",
-    "slot-5": "slot5_claude:claude, slot5_codex:codex",
+    "main": "main_claude:claude; main_codex:codex",
+    "slot-1": "slot1_claude:claude; slot1_codex:codex",
+    "slot-2": "slot2_claude:claude; slot2_codex:codex",
+    "slot-3": "slot3_claude:claude; slot3_codex:codex",
 }
 EXPECTED_AGENTS = {
     "main_claude": "claude",
@@ -44,10 +42,6 @@ EXPECTED_AGENTS = {
     "slot2_codex": "codex",
     "slot3_claude": "claude",
     "slot3_codex": "codex",
-    "slot4_claude": "claude",
-    "slot4_codex": "codex",
-    "slot5_claude": "claude",
-    "slot5_codex": "codex",
 }
 
 
@@ -77,7 +71,7 @@ def main() -> int:
         return fail("entry_window must be main")
     windows = config.get("windows")
     if windows != EXPECTED_WINDOWS:
-        return fail(f"[windows] must be main plus slot-1..slot-5: {EXPECTED_WINDOWS}")
+        return fail(f"[windows] must be main plus slot-1..slot-3: {EXPECTED_WINDOWS}")
 
     agents = config.get("agents")
     if not isinstance(agents, dict):

@@ -146,7 +146,7 @@ test("GET /api/projects/:projectId/onboarding-status reports runtime and knowled
     assert.ok(manualCommand.includes("mkdir -p .ccb"), "manualCommand 应创建 .ccb 目录");
     assert.ok(manualCommand.includes("cat > .ccb/ccb.config"), "manualCommand 应写入 ccb.config");
     assert.ok(manualCommand.includes(`[windows]`), "manualCommand 应包含 v7 windows topology");
-    assert.ok(manualCommand.includes(`slot-5 = "slot5_claude:claude, slot5_codex:codex"`), "manualCommand 应包含 5 个业务 slot");
+    assert.ok(manualCommand.includes(`slot-3 = "slot3_claude:claude; slot3_codex:codex"`), "manualCommand 应包含 3 个业务 slot");
     assert.ok(!manualCommand.includes("[ui.sidebar.view]"), "manualCommand 不应包含动态 slot tips 投影");
     assert.ok(/\bccb\s*$/m.test(manualCommand) || manualCommand.trim().endsWith("ccb") || manualCommand.includes("EOF\n"), "manualCommand 应在 heredoc 后启动 ccb");
 
@@ -225,7 +225,7 @@ test("GET /api/projects/:projectId/project-ccbd/status exposes managed config dr
     assert.equal(response.json().projectId, project.id);
     assert.equal(response.json().startupBlocked, true);
     assert.equal(response.json().config.drift.requiresUserConfirmation, true);
-    assert.match(response.json().config.drift.diff, /slot-5/);
+    assert.match(response.json().config.drift.diff, /\+ main = "main_claude:claude; main_codex:codex"/);
 
     const missingProjectResponse = await app.inject({
       method: "GET",

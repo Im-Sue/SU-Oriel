@@ -94,7 +94,7 @@ test("JobSlotRouter binds a requirement, writes slot queue row, and targets the 
   assert.equal(await prisma.eventJournal.count({ where: { eventType: "slot_queued_request" } }), 1);
 });
 
-test("JobSlotRouter queues overflow when all five slots are bound", async () => {
+test("JobSlotRouter queues overflow when all three slots are bound", async () => {
   const fixtures = [];
   const project = await prisma.project.create({
     data: {
@@ -102,7 +102,7 @@ test("JobSlotRouter queues overflow when all five slots are bound", async () => 
       localPath: join(tmpdir(), `job-slot-router-overflow-${randomUUID()}`)
     }
   });
-  for (let index = 0; index < 6; index++) {
+  for (let index = 0; index < 4; index++) {
     fixtures.push(
       await prisma.requirement.create({
         data: {
@@ -115,7 +115,7 @@ test("JobSlotRouter queues overflow when all five slots are bound", async () => 
     );
   }
   const slotBinding = new SlotBindingService(prisma);
-  for (const requirement of fixtures.slice(0, 5)) {
+  for (const requirement of fixtures.slice(0, 3)) {
     await slotBinding.bindRequirement({ projectId: project.id, requirementId: requirement.id });
   }
   const submit = vi.fn(async () => ({ jobId: "unused" }));
@@ -127,9 +127,9 @@ test("JobSlotRouter queues overflow when all five slots are bound", async () => 
 
   const result = await router.enqueue({
     projectId: project.id,
-    requirementId: fixtures[5].id,
+    requirementId: fixtures[3].id,
     subjectType: "requirement",
-    subjectId: fixtures[5].id,
+    subjectId: fixtures[3].id,
     command: "/ccb:su-flow --payload {}",
     dispatchPayload: { subject: "requirement" }
   });
@@ -143,29 +143,29 @@ test("JobSlotRouter queues overflow when all five slots are bound", async () => 
 });
 
 test("JobSlotRouter.tick drains the oldest current-project queued request into an idle slot without worktree allocation", async () => {
-  const projectOne = await createProjectWithRequirements(6);
-  const projectTwo = await createProjectWithRequirements(6);
+  const projectOne = await createProjectWithRequirements(4);
+  const projectTwo = await createProjectWithRequirements(4);
   const slotBinding = new SlotBindingService(prisma);
-  for (const requirement of projectOne.requirements.slice(0, 5)) {
+  for (const requirement of projectOne.requirements.slice(0, 3)) {
     await slotBinding.bindRequirement({ projectId: projectOne.project.id, requirementId: requirement.id });
   }
-  for (const requirement of projectTwo.requirements.slice(0, 5)) {
+  for (const requirement of projectTwo.requirements.slice(0, 3)) {
     await slotBinding.bindRequirement({ projectId: projectTwo.project.id, requirementId: requirement.id });
   }
   const router = new JobSlotRouter({ prismaClient: prisma, slotBinding });
   const otherProjectQueued = await router.enqueue({
     projectId: projectTwo.project.id,
-    requirementId: projectTwo.requirements[5].id,
+    requirementId: projectTwo.requirements[3].id,
     subjectType: "requirement",
-    subjectId: projectTwo.requirements[5].id,
+    subjectId: projectTwo.requirements[3].id,
     command: "/ccb:su-flow --payload {}",
     requestedAt: new Date("2026-05-24T00:00:00.000Z")
   });
   const currentProjectQueued = await router.enqueue({
     projectId: projectOne.project.id,
-    requirementId: projectOne.requirements[5].id,
+    requirementId: projectOne.requirements[3].id,
     subjectType: "requirement",
-    subjectId: projectOne.requirements[5].id,
+    subjectId: projectOne.requirements[3].id,
     command: "/ccb:su-flow --payload {}",
     requestedAt: new Date("2026-05-24T00:00:01.000Z")
   });

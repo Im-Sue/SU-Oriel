@@ -25,7 +25,7 @@ async function projectRoot(): Promise<string> {
   return root;
 }
 
-test("renderManagedCcbConfig emits v7 main plus five slot windows and twelve managed agents", () => {
+test("renderManagedCcbConfig emits v7 main plus three slot windows and eight managed agents", () => {
   const result = renderManagedCcbConfig({
     projectId: "project-1",
     projectRoot: "/repo"
@@ -34,14 +34,20 @@ test("renderManagedCcbConfig emits v7 main plus five slot windows and twelve man
   assert.equal(result.drift?.kind, "missing");
   assert.match(result.configText, /^version = 2$/m);
   assert.match(result.configText, /^entry_window = "main"$/m);
+  assert.match(result.configText, /^main = "main_claude:claude; main_codex:codex"$/m);
+  assert.match(result.configText, /^slot-3 = "slot3_claude:claude; slot3_codex:codex"$/m);
   for (const windowName of MANAGED_WINDOW_NAMES) {
     assert.match(result.configText, new RegExp(`^${windowName.replace("-", "\\-")} = `, "m"));
   }
   for (const agentName of MANAGED_AGENT_NAMES) {
     assert.match(result.configText, new RegExp(`^\\[agents\\.${agentName}]$`, "m"));
   }
-  assert.equal((result.configText.match(/workspace_mode = "inplace"/g) ?? []).length, 12);
-  assert.equal((result.configText.match(/queue_policy = "serial-per-agent"/g) ?? []).length, 12);
+  assert.equal((result.configText.match(/workspace_mode = "inplace"/g) ?? []).length, 8);
+  assert.equal((result.configText.match(/queue_policy = "serial-per-agent"/g) ?? []).length, 8);
+  assert.equal((result.configText.match(/model = "opus\[1m]"/g) ?? []).length, 4);
+  assert.equal((result.configText.match(/startup_args = \["--effort", "max"]/g) ?? []).length, 4);
+  assert.doesNotMatch(result.configText, /^\[agents\.slot4_/m);
+  assert.doesNotMatch(result.configText, /^\[agents\.slot5_/m);
   assert.doesNotMatch(result.configText, /^cmd_enabled\s*=/m);
   assert.doesNotMatch(result.configText, /^default_agents\s*=/m);
   assert.doesNotMatch(result.configText, /^layout\s*=/m);
@@ -104,9 +110,9 @@ test("renderManagedCcbConfig detects user-edited three-slot core drift", () => {
     "",
     "[windows]",
     'main = "ccb_claude:claude, ccb_codex:codex"',
-    'slot-1 = "slot1_claude:claude, slot1_codex:codex"',
-    'slot-2 = "slot2_claude:claude, slot2_codex:codex"',
-    'slot-3 = "slot3_claude:claude, slot3_codex:codex"',
+    'slot-1 = "slot1_claude:claude; slot1_codex:codex"',
+    'slot-2 = "slot2_claude:claude; slot2_codex:codex"',
+    'slot-3 = "slot3_claude:claude; slot3_codex:codex"',
     ""
   ].join("\n");
 
@@ -118,11 +124,13 @@ test("renderManagedCcbConfig detects user-edited three-slot core drift", () => {
 
   assert.equal(result.drift?.kind, "core_drift");
   assert.equal(result.drift?.requiresUserConfirmation, true);
-  assert.match(result.drift?.diff ?? "", /slot-4/);
-  assert.match(result.drift?.diff ?? "", /slot-5/);
+  assert.match(result.drift?.diff ?? "", /\+ main = "main_claude:claude; main_codex:codex"/);
+  assert.match(result.drift?.diff ?? "", /- main = "ccb_claude:claude, ccb_codex:codex"/);
+  assert.doesNotMatch(result.drift?.diff ?? "", /slot-4/);
+  assert.doesNotMatch(result.drift?.diff ?? "", /slot-5/);
 });
 
-test("ensureManagedCcbConfig writes managed config and preserves allowed non-core model fields", async () => {
+test("ensureManagedCcbConfig writes managed config and preserves allowed non-core fields over defaults", async () => {
   const root = await projectRoot();
   const configPath = join(root, ".ccb", "ccb.config");
   await mkdir(join(root, ".ccb"), { recursive: true });
@@ -133,12 +141,14 @@ test("ensureManagedCcbConfig writes managed config and preserves allowed non-cor
       'entry_window = "main"',
       "",
       "[windows]",
-      'main = "main_claude:claude, main_codex:codex"',
-      'slot-1 = "slot1_claude:claude, slot1_codex:codex"',
-      'slot-2 = "slot2_claude:claude, slot2_codex:codex"',
-      'slot-3 = "slot3_claude:claude, slot3_codex:codex"',
-      'slot-4 = "slot4_claude:claude, slot4_codex:codex"',
-      'slot-5 = "slot5_claude:claude, slot5_codex:codex"',
+      'main = "main_claude:claude; main_codex:codex"',
+      'slot-1 = "slot1_claude:claude; slot1_codex:codex"',
+      'slot-2 = "slot2_claude:claude; slot2_codex:codex"',
+      'slot-3 = "slot3_claude:claude; slot3_codex:codex"',
+      "",
+      "[agents.slot1_claude]",
+      'model = "sonnet"',
+      'startup_args = ["--permission-mode", "acceptEdits"]',
       "",
       "[agents.slot3_codex]",
       'provider = "codex"',
@@ -160,10 +170,24 @@ test("ensureManagedCcbConfig writes managed config and preserves allowed non-cor
   });
 
   const written = await readFile(configPath, "utf8");
+  const mainClaude = agentBlock(written, "main_claude");
+  assert.match(mainClaude, /model = "opus\[1m]"/);
+  assert.ok(mainClaude.includes('startup_args = ["--effort", "max"]'));
+  const slot1Claude = agentBlock(written, "slot1_claude");
+  assert.match(slot1Claude, /model = "sonnet"/);
+  assert.ok(slot1Claude.includes('startup_args = ["--permission-mode", "acceptEdits"]'));
+  assert.doesNotMatch(slot1Claude, /opus/);
   assert.match(written, /\[agents\.slot3_codex]/);
-  assert.match(written, /model = "gpt-5-codex"/);
+  const slot3Codex = agentBlock(written, "slot3_codex");
+  assert.match(slot3Codex, /model = "gpt-5-codex"/);
+  assert.doesNotMatch(slot3Codex, /startup_args/);
 });
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function agentBlock(configText: string, agentName: string): string {
+  const match = configText.match(new RegExp(`\\[agents\\.${agentName}]\\n[\\s\\S]*?(?=\\n\\[agents\\.|\\n*$)`));
+  return match?.[0] ?? "";
 }

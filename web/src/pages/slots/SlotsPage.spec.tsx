@@ -61,9 +61,7 @@ const projection: SlotProjectionView = {
       requirement: { id: "req-3", title: "Unhealthy Requirement" },
       stale: { detectedAt: "2026-05-18T00:00:00.000Z", notifiedCount: 1 },
       unhealthy: { degradedReason: "busy_timeout", severity: "error", emittedAt: "2026-05-21T04:00:00.000Z" }
-    }),
-    slot("slot-4"),
-    slot("slot-5")
+    })
   ],
   queue: [
     {
@@ -142,7 +140,7 @@ describe("SlotsPage", () => {
     useProjectStore.setState({ projects: [], selectedProjectId: null });
   });
 
-  it("renders main lane, five slot rows, bound requirement, queue, and health badges", async () => {
+  it("renders main lane, three slot rows, bound requirement, queue, and health badges", async () => {
     render(
       <MemoryRouter>
         <SlotsPage />
@@ -152,7 +150,7 @@ describe("SlotsPage", () => {
     expect(fetchSlots).toHaveBeenCalledWith("project-1");
     expect(await screen.findByText("main")).toBeInTheDocument();
     expect(screen.getByText("协调通道")).toBeInTheDocument();
-    expect(screen.getAllByTestId("slot-row")).toHaveLength(5);
+    expect(screen.getAllByTestId("slot-row")).toHaveLength(3);
     expect(screen.getByText("Bound Requirement")).toBeInTheDocument();
     expect(screen.getByText("Queued Requirement")).toBeInTheDocument();
     expect(screen.getByText("stale")).toBeInTheDocument();
@@ -197,7 +195,7 @@ describe("SlotsPage", () => {
         ...projectCcbdReady.config,
         drift: {
           kind: "core_drift",
-          diff: '+ slot-5 = "slot5_claude:claude, slot5_codex:codex"',
+          diff: '+ main = "main_claude:claude; main_codex:codex"',
           requiresUserConfirmation: true
         }
       }
@@ -210,7 +208,7 @@ describe("SlotsPage", () => {
     );
 
     expect(await screen.findByText("Project ccbd 启动已阻断")).toBeInTheDocument();
-    expect(screen.getByText(/\+ slot-5/)).toBeInTheDocument();
+    expect(screen.getByText(/\+ main = "main_claude:claude; main_codex:codex"/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "确认恢复并启动" }));
 

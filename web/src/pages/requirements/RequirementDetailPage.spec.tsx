@@ -139,7 +139,7 @@ function buildSlotProjection(
   overrides: Partial<SlotProjectionView> = {},
   slotOverrides: Array<Partial<SlotProjectionView["slots"][number]>> = []
 ): SlotProjectionView {
-  const slots = Array.from({ length: 5 }, (_, index): SlotProjectionView["slots"][number] => {
+  const slots = Array.from({ length: 3 }, (_, index): SlotProjectionView["slots"][number] => {
     const slotId = `slot-${index + 1}`;
     const override = slotOverrides.find((slot) => slot.slotId === slotId) ?? {};
     return {
@@ -491,19 +491,19 @@ describe("RequirementDetailPage 极简详情页", () => {
     vi.mocked(consoleApi.fetchRequirementDetail).mockResolvedValue(buildRequirement({ status: "planning" }));
     vi.mocked(consoleApi.fetchSlots).mockResolvedValue(buildSlotProjection({}, [
       {
-        slotId: "slot-4",
+        slotId: "slot-3",
         state: "draining",
         requirement: { id: "req-1", title: "可编辑需求" },
         boundAt: "2026-05-24T00:00:00.000Z",
         lastActivityAt: "2026-05-24T01:00:00.000Z"
       }
     ]));
-    vi.mocked(fetch).mockResolvedValueOnce(slotTerminalResponse("slot-4"));
+    vi.mocked(fetch).mockResolvedValueOnce(slotTerminalResponse("slot-3"));
 
     renderPage();
 
     const slotRegion = await screen.findByRole("region", { name: "Slot 运行位置" });
-    expect(await within(slotRegion).findByText("正在写 slot-4 的 claude")).toBeInTheDocument();
+    expect(await within(slotRegion).findByText("正在写 slot-3 的 claude")).toBeInTheDocument();
     expect(within(slotRegion).queryByRole("button", { name: "解绑 slot" })).not.toBeInTheDocument();
     expect(within(slotRegion).getByRole("link", { name: "打开 Slots" })).toHaveAttribute("href", "/slots");
   });

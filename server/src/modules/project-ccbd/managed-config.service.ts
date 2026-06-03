@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
-export const MANAGED_WINDOW_NAMES = ["main", "slot-1", "slot-2", "slot-3", "slot-4", "slot-5"] as const;
+export const MANAGED_WINDOW_NAMES = ["main", "slot-1", "slot-2", "slot-3"] as const;
 export const MANAGED_AGENT_NAMES = [
   "main_claude",
   "main_codex",
@@ -12,10 +12,6 @@ export const MANAGED_AGENT_NAMES = [
   "slot2_codex",
   "slot3_claude",
   "slot3_codex",
-  "slot4_claude",
-  "slot4_codex",
-  "slot5_claude",
-  "slot5_codex"
 ] as const;
 
 export const MANAGED_CCB_CONFIG_RELATIVE_PATH = join(".ccb", "ccb.config");
@@ -58,11 +54,12 @@ const AGENT_CORE: Record<ManagedAgentName, AgentCore> = {
   slot2_claude: { provider: "claude", windowName: "slot-2" },
   slot2_codex: { provider: "codex", windowName: "slot-2" },
   slot3_claude: { provider: "claude", windowName: "slot-3" },
-  slot3_codex: { provider: "codex", windowName: "slot-3" },
-  slot4_claude: { provider: "claude", windowName: "slot-4" },
-  slot4_codex: { provider: "codex", windowName: "slot-4" },
-  slot5_claude: { provider: "claude", windowName: "slot-5" },
-  slot5_codex: { provider: "codex", windowName: "slot-5" }
+  slot3_codex: { provider: "codex", windowName: "slot-3" }
+};
+
+const CLAUDE_AGENT_DEFAULTS = {
+  model: '"opus[1m]"',
+  startup_args: '["--effort", "max"]'
 };
 
 const NON_CORE_AGENT_KEYS = new Set([
@@ -84,12 +81,10 @@ export function buildManagedCcbConfig(
     'entry_window = "main"',
     "",
     "[windows]",
-    'main = "main_claude:claude, main_codex:codex"',
-    'slot-1 = "slot1_claude:claude, slot1_codex:codex"',
-    'slot-2 = "slot2_claude:claude, slot2_codex:codex"',
-    'slot-3 = "slot3_claude:claude, slot3_codex:codex"',
-    'slot-4 = "slot4_claude:claude, slot4_codex:codex"',
-    'slot-5 = "slot5_claude:claude, slot5_codex:codex"',
+    'main = "main_claude:claude; main_codex:codex"',
+    'slot-1 = "slot1_claude:claude; slot1_codex:codex"',
+    'slot-2 = "slot2_claude:claude; slot2_codex:codex"',
+    'slot-3 = "slot3_claude:claude; slot3_codex:codex"',
     "",
     "[ui.sidebar]",
     'mode = "every_window"',
@@ -115,7 +110,9 @@ export function buildManagedCcbConfig(
       'queue_policy = "serial-per-agent"'
     );
     const preserved = preservedAgentFields[agentName] ?? {};
-    for (const [key, value] of Object.entries(preserved)) {
+    const agentDefaults = core.provider === "claude" ? CLAUDE_AGENT_DEFAULTS : {};
+    const nonCoreFields = { ...agentDefaults, ...preserved };
+    for (const [key, value] of Object.entries(nonCoreFields)) {
       lines.push(`${key} = ${value}`);
     }
     lines.push("");

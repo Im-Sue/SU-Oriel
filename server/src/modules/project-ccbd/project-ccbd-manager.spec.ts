@@ -63,8 +63,8 @@ test("ProjectCcbdManager creates missing managed config and starts one ccbd at t
   assert.equal(runtime.projectRoot, root);
   assert.equal(runtime.status, "ready");
   const config = await readFile(join(root, ".ccb", "ccb.config"), "utf8");
-  assert.match(config, /^main = "main_claude:claude, main_codex:codex"$/m);
-  assert.match(config, /^slot-5 = "slot5_claude:claude, slot5_codex:codex"$/m);
+  assert.match(config, /^main = "main_claude:claude; main_codex:codex"$/m);
+  assert.match(config, /^slot-3 = "slot3_claude:claude; slot3_codex:codex"$/m);
 });
 
 test("ProjectCcbdManager reconciles sidebar tips from current slot bindings on startup", async () => {
@@ -116,7 +116,7 @@ test("ProjectCcbdManager blocks startup on managed core drift and exposes drift 
   const status = await manager.getStatus(projectId);
   assert.equal(status.startupBlocked, true);
   assert.equal(status.config.drift?.requiresUserConfirmation, true);
-  assert.match(status.config.drift?.diff ?? "", /slot-5/);
+  assert.match(status.config.drift?.diff ?? "", /\+ main = "main_claude:claude; main_codex:codex"/);
 });
 
 test("ProjectCcbdManager confirmRestore writes managed core after drift and starts project ccbd", async () => {
@@ -149,6 +149,6 @@ test("ProjectCcbdManager confirmRestore writes managed core after drift and star
   assert.equal(result.status.startupBlocked, false);
   assert.equal(result.status.config.drift, null);
   const config = await readFile(join(root, ".ccb", "ccb.config"), "utf8");
-  assert.match(config, /^slot-5 = "slot5_claude:claude, slot5_codex:codex"$/m);
+  assert.match(config, /^slot-3 = "slot3_claude:claude; slot3_codex:codex"$/m);
   assert.match(config, /^model = "sonnet"$/m);
 });

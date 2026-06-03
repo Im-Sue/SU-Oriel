@@ -61,28 +61,6 @@ const slotProjection: SlotProjectionView = {
       stale: null,
       unhealthy: null,
       queued: []
-    },
-    {
-      slotId: "slot-4",
-      state: "idle",
-      requirement: null,
-      boundAt: null,
-      busySince: null,
-      lastActivityAt: null,
-      stale: null,
-      unhealthy: null,
-      queued: []
-    },
-    {
-      slotId: "slot-5",
-      state: "idle",
-      requirement: null,
-      boundAt: null,
-      busySince: null,
-      lastActivityAt: null,
-      stale: null,
-      unhealthy: null,
-      queued: []
     }
   ],
   queue: [],
