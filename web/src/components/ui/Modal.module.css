@@ -35,6 +35,19 @@
   width: min(1200px, 92vw);
 }
 
+/* 长文阅读:近全屏、内容区占满高度并滚动(供需求/技术设计阅读弹窗用)。 */
+.modal_reader {
+  width: min(980px, 94vw);
+  height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal_reader .content {
+  flex: 1;
+  max-height: none;
+}
+
 .header,
 .footer {
   display: flex;
