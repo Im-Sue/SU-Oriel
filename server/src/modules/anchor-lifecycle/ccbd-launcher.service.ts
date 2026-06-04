@@ -201,7 +201,13 @@ function buildTmuxLaunchCommand(ccbCommand: string, anchorPath: string): string 
   // 否则 ccb 会从我们外层 tmux 给的 pty 取 size，受外层 tmux size 限制。
   // CCB_SKIP_STARTUP_UPDATE_CHECK=1 跳过 ccb 的"是否升级"交互 prompt
   // （tmux pty 是 tty，ccb 会弹"Release update available [y/N/s]"卡住）。
-  return `env -u TMUX -u TMUX_PANE CCB_NO_ATTACH=1 CCB_SKIP_STARTUP_UPDATE_CHECK=1 ${shellQuote(ccbCommand)} --project ${shellQuote(anchorPath)}`;
+  return `env -u TMUX -u TMUX_PANE CCB_NO_ATTACH=1 CCB_SKIP_STARTUP_UPDATE_CHECK=1 CCB_REPLY_LANG=${resolveCcbReplyLang()} ${shellQuote(ccbCommand)} --project ${shellQuote(anchorPath)}`;
+}
+
+function resolveCcbReplyLang(): "zh" | "en" {
+  const raw = process.env.CCB_REPLY_LANG ?? process.env.CCB_LANG ?? "";
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "en" || normalized === "english" ? "en" : "zh";
 }
 
 function shellQuote(value: string): string {
