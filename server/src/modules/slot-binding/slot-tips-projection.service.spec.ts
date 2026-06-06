@@ -11,6 +11,7 @@ import { AttentionInboxService } from "../attention-inbox/attention-inbox.servic
 import {
   computeSlotTipsProjection,
   SLOT_TIP_TITLE_MAX_CHARS,
+  SlotTipsPeriodicSyncService,
   syncSlotTips
 } from "./slot-tips-projection.service.js";
 
@@ -57,11 +58,21 @@ async function createRequirement(projectId: string, title: string) {
   });
 }
 
+async function waitForCondition(assertion: () => boolean, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (assertion()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail("等待条件超时");
+}
+
 beforeEach(async () => {
   await resetDatabase();
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await resetDatabase();
   await Promise.all(tmpRoots.map((root) => rm(root, { recursive: true, force: true })));
   tmpRoots.length = 0;
@@ -201,6 +212,44 @@ test("syncSlotTips skips managed-config writes when the tips content hash is unc
   assert.equal(first.status, "ok");
   assert.equal(second.status, "skipped");
   assert.equal(second.reason, "content_unchanged");
+  assert.equal(writeManagedConfig.mock.calls.length, 1);
+});
+
+test("SlotTipsPeriodicSyncService ticks slot tips sync and stops without leaking intervals", async () => {
+  const { projectId } = await createProjectWithRoot();
+  const requirement = await createRequirement(projectId, "Periodic Text");
+  await prisma.slotBinding.create({
+    data: { projectId, slotId: "slot-1", requirementId: requirement.id, state: "bound" }
+  });
+  const attentionService = {
+    async computeAttention() {
+      return {
+        project_id: projectId,
+        count: 0,
+        items: []
+      };
+    }
+  };
+  const writeManagedConfig = vi.fn(async () => ({
+    configText: "",
+    coreSignature: "",
+    drift: null
+  }));
+  const periodic = new SlotTipsPeriodicSyncService({
+    intervalMs: 10,
+    attentionService,
+    writeManagedConfig
+  });
+
+  periodic.start(projectId, { client: prisma });
+  await waitForCondition(() => writeManagedConfig.mock.calls.length === 1);
+  assert.equal(writeManagedConfig.mock.calls.length, 1);
+
+  await new Promise((resolve) => setTimeout(resolve, 35));
+  assert.equal(writeManagedConfig.mock.calls.length, 1);
+
+  periodic.stop(projectId);
+  await new Promise((resolve) => setTimeout(resolve, 35));
   assert.equal(writeManagedConfig.mock.calls.length, 1);
 });
 

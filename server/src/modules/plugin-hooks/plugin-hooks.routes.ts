@@ -15,6 +15,7 @@ import {
   reindexRequirementFromMarkdown as defaultReindexRequirementFromMarkdown
 } from "../requirement/requirement-reindex.service.js";
 import { updateSlotActivityForCapabilityOutcome } from "../slot-binding/slot-binding.service.js";
+import { syncSlotTips } from "../slot-binding/slot-tips-projection.service.js";
 
 const LOCAL_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const DEFAULT_DEBOUNCE_MS = 200;
@@ -93,12 +94,15 @@ export async function registerPluginHookRoutes(
     dependencies.journalReconcileCooldownMs ?? DEFAULT_JOURNAL_RECONCILE_COOLDOWN_MS;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const journalReconcileCooldowns = new Map<string, number>();
+  const slotTipSyncs = new Set<Promise<unknown>>();
 
   app.addHook("onClose", async () => {
     for (const timer of timers.values()) {
       clearTimeout(timer);
     }
     timers.clear();
+    await Promise.allSettled(slotTipSyncs);
+    slotTipSyncs.clear();
   });
 
   app.post("/api/plugin-hooks/event-journal", async (request, reply) => {
@@ -157,6 +161,7 @@ export async function registerPluginHookRoutes(
     if (scanQueued) {
       queueProjectScan(project.id);
     }
+    queueSlotTipsSync(project.id);
     reply.status(202);
     return {
       ok: true,
@@ -248,6 +253,14 @@ export async function registerPluginHookRoutes(
     }, debounceMs);
     timer.unref?.();
     timers.set(projectId, timer);
+  }
+
+  function queueSlotTipsSync(projectId: string): void {
+    const pending = syncSlotTips(projectId, { client: db, logger: app.log }).finally(() => {
+      slotTipSyncs.delete(pending);
+    });
+    slotTipSyncs.add(pending);
+    void pending;
   }
 }
 

@@ -7,6 +7,7 @@ import { AttentionInboxService, type AttentionInboxServiceLike } from "../attent
 import { ensureManagedCcbConfig } from "../project-ccbd/managed-config.service.js";
 
 const ACTIVE_TIP_STATES = ["bound", "busy", "unhealthy", "recovering"] as const;
+export const DEFAULT_SLOT_TIPS_SYNC_INTERVAL_MS = 30_000;
 export const SLOT_TIP_TITLE_MAX_CHARS = 24;
 
 type SlotTipsConfigWriter = typeof ensureManagedCcbConfig;
@@ -19,6 +20,18 @@ type SlotTipsProjectionOptions = {
   attentionService?: Pick<AttentionInboxServiceLike, "computeAttention">;
 };
 
+type SlotTipsSyncOptions = {
+  client?: PrismaClient;
+  logger?: SlotTipsLogger;
+  attentionService?: Pick<AttentionInboxServiceLike, "computeAttention">;
+  writeManagedConfig?: SlotTipsConfigWriter;
+};
+
+type SlotTipsPeriodicSyncOptions = SlotTipsSyncOptions & {
+  intervalMs?: number;
+  syncSlotTipsFn?: typeof syncSlotTips;
+};
+
 export type SlotTipsSyncResult = {
   projectId: string;
   projectRoot: string | null;
@@ -29,6 +42,61 @@ export type SlotTipsSyncResult = {
 
 const projectLocks = new Map<string, Promise<void>>();
 const lastWrittenTipHashes = new Map<string, string>();
+type SlotTipsTimer = ReturnType<typeof setInterval>;
+
+export class SlotTipsPeriodicSyncService {
+  private readonly timers = new Map<string, SlotTipsTimer>();
+
+  constructor(private readonly options: SlotTipsPeriodicSyncOptions = {}) {}
+
+  start(projectId: string, options: SlotTipsSyncOptions = {}): void {
+    if (this.timers.has(projectId)) {
+      return;
+    }
+
+    const timer = setInterval(() => this.tick(projectId, options), this.options.intervalMs ?? DEFAULT_SLOT_TIPS_SYNC_INTERVAL_MS);
+    timer.unref?.();
+    this.timers.set(projectId, timer);
+  }
+
+  stop(projectId: string): void {
+    const timer = this.timers.get(projectId);
+    if (!timer) {
+      return;
+    }
+    clearInterval(timer);
+    this.timers.delete(projectId);
+  }
+
+  dispose(): void {
+    for (const projectId of this.timers.keys()) {
+      this.stop(projectId);
+    }
+  }
+
+  private async tick(projectId: string, options: SlotTipsSyncOptions): Promise<void> {
+    const run = this.options.syncSlotTipsFn ?? syncSlotTips;
+    try {
+      await run(projectId, {
+        client: options.client ?? this.options.client,
+        logger: options.logger ?? this.options.logger,
+        attentionService: options.attentionService ?? this.options.attentionService,
+        writeManagedConfig: options.writeManagedConfig ?? this.options.writeManagedConfig
+      });
+    } catch (error) {
+      (options.logger ?? this.options.logger)?.warn?.(
+        {
+          event: "slot_tips.periodic_sync.failed",
+          projectId,
+          err: error
+        },
+        "periodic slot tips sync failed; continuing"
+      );
+    }
+  }
+}
+
+export const defaultSlotTipsPeriodicSyncService = new SlotTipsPeriodicSyncService();
 
 export async function computeSlotTipsProjection(
   client: PrismaClient,
@@ -75,12 +143,7 @@ export async function computeSlotTipsProjection(
 
 export async function syncSlotTips(
   projectId: string,
-  options: {
-    client?: PrismaClient;
-    logger?: SlotTipsLogger;
-    attentionService?: Pick<AttentionInboxServiceLike, "computeAttention">;
-    writeManagedConfig?: SlotTipsConfigWriter;
-  } = {}
+  options: SlotTipsSyncOptions = {}
 ): Promise<SlotTipsSyncResult> {
   const client = options.client ?? prisma;
   const writeManagedConfig = options.writeManagedConfig ?? ensureManagedCcbConfig;
