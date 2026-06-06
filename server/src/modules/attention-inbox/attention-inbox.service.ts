@@ -16,6 +16,7 @@ import type {
   AttentionListResponse,
   AttentionSettingsResponse
 } from "./attention-inbox.types.js";
+import { ProviderActivitySource } from "./provider-activity.source.js";
 
 const DEFAULT_EVENT_LOOKBACK_DAYS = 30;
 const SEVERITY_RANK: Record<AttentionItem["severity"], number> = {
@@ -43,7 +44,10 @@ export interface AttentionInboxServiceLike {
 }
 
 export class AttentionInboxService implements AttentionInboxServiceLike {
-  constructor(private readonly db: PrismaClient = prisma) {}
+  constructor(
+    private readonly db: PrismaClient = prisma,
+    private readonly providerActivitySource = new ProviderActivitySource()
+  ) {}
 
   async computeAttention(
     projectId: string,
@@ -66,7 +70,7 @@ export class AttentionInboxService implements AttentionInboxServiceLike {
       ackRows,
       settings
     ] = await Promise.all([
-      this.db.project.findUnique({ where: { id: projectId }, select: { id: true } }),
+      this.db.project.findUnique({ where: { id: projectId }, select: { id: true, localPath: true } }),
       this.db.task.findMany({
         where: { projectId },
         select: {
@@ -104,11 +108,7 @@ export class AttentionInboxService implements AttentionInboxServiceLike {
         orderBy: { emittedAt: "asc" }
       }),
       this.db.slotBinding.findMany({
-        where: {
-          projectId,
-          requirementId: { not: null },
-          state: { in: ["unhealthy", "recovering"] }
-        },
+        where: { projectId },
         include: { requirement: { select: { title: true } } }
       }),
       this.db.attentionAck.findMany({
@@ -154,6 +154,20 @@ export class AttentionInboxService implements AttentionInboxServiceLike {
       }
     }
 
+    const dispatchRows = await this.loadProviderDispatchRows(
+      requirements.map((requirement) => requirement.id),
+      [...taskById.keys()]
+    );
+    const providerActivityItems = await this.providerActivitySource.collect({
+      projectId,
+      projectRoot: project.localPath,
+      now,
+      slotBindings: slotRows,
+      dispatchRows,
+      taskRequirementByTaskId: new Map([...taskById].map(([taskId, task]) => [taskId, task.requirementId])),
+      requirementTitleById
+    });
+
     const items = [
       ...reviewIntents.map((intent) => projectReviewIntent(intent, taskById.get(intent.taskId) ?? null)),
       ...consultRequests.map((consultRequest) =>
@@ -166,7 +180,8 @@ export class AttentionInboxService implements AttentionInboxServiceLike {
         const item = projectEventJournal(event, taskById, requirementTitleById);
         return item ? [item] : [];
       }),
-      ...slotRows.map((row) => projectSlotBinding(row))
+      ...slotRows.filter((row) => ["unhealthy", "recovering"].includes(row.state)).map((row) => projectSlotBinding(row)),
+      ...providerActivityItems
     ];
 
     const ackedRefs = new Set(ackRows.map((row) => row.ref));
@@ -234,6 +249,35 @@ export class AttentionInboxService implements AttentionInboxServiceLike {
     if (!project) {
       throw new AttentionProjectNotFoundError();
     }
+  }
+
+  private async loadProviderDispatchRows(requirementIds: string[], taskIds: string[]) {
+    const predicates = [];
+    if (requirementIds.length > 0) {
+      predicates.push({ subjectType: "requirement", subjectId: { in: requirementIds } });
+    }
+    if (taskIds.length > 0) {
+      predicates.push({ subjectType: "subtask", subjectId: { in: taskIds } });
+    }
+    if (predicates.length === 0) {
+      return [];
+    }
+    return await this.db.anchorDispatchQueue.findMany({
+      where: {
+        status: { in: ["pending", "submitted"] },
+        OR: predicates
+      },
+      select: {
+        jobId: true,
+        anchorId: true,
+        subjectType: true,
+        subjectId: true,
+        status: true,
+        queuedAt: true,
+        submittedAt: true
+      },
+      orderBy: { queuedAt: "desc" }
+    });
   }
 }
 

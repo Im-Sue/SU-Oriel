@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,6 +21,7 @@ const ATTENTION_EVENT_TYPES = [
 async function resetDatabase(): Promise<void> {
   await prisma.attentionAck.deleteMany();
   await prisma.projectAttentionSettings.deleteMany();
+  await prisma.anchorDispatchQueue.deleteMany();
   await prisma.consultRequest.deleteMany();
   await prisma.eventJournal.deleteMany();
   await prisma.reviewIntent.deleteMany();
@@ -34,10 +36,11 @@ async function resetDatabase(): Promise<void> {
 }
 
 async function fixture() {
+  const localPath = join(tmpdir(), `ccb-attention-${randomUUID()}`);
   const project = await prisma.project.create({
     data: {
       name: `Attention ${randomUUID()}`,
-      localPath: join(tmpdir(), `ccb-attention-${randomUUID()}`),
+      localPath,
       updatedAt: NOW
     }
   });
@@ -60,7 +63,7 @@ async function fixture() {
       updatedAt: NOW
     }
   });
-  return { projectId: project.id, requirementId: requirement.id, taskId: task.id, taskKey: task.taskKey };
+  return { projectId: project.id, localPath, requirementId: requirement.id, taskId: task.id, taskKey: task.taskKey };
 }
 
 async function createOtherProjectConsultRequest(): Promise<void> {
@@ -251,6 +254,36 @@ test("ack left-anti-join and DND suppress visible attention items", async () => 
   assert.equal(visibleAgain.count, 9);
 });
 
+test("computeAttention includes provider activity source and ack suppresses it", async () => {
+  const fx = await fixture();
+  await writeProviderActivityFixture(fx.localPath);
+  await prisma.slotBinding.create({
+    data: {
+      projectId: fx.projectId,
+      slotId: "slot-1",
+      requirementId: fx.requirementId,
+      state: "bound",
+      boundAt: new Date("2026-06-06T10:00:00.000Z"),
+      lastActivityAt: new Date("2026-06-06T11:59:00.000Z")
+    }
+  });
+
+  const service = new AttentionInboxService(prisma);
+  const first = await service.computeAttention(fx.projectId, { now: NOW });
+  const providerItem = first.items.find((item) => item.kind === "agent_waiting");
+
+  assert.ok(providerItem);
+  assert.equal(providerItem.source, "provider_activity");
+  assert.equal(providerItem.severity, "attention");
+  assert.equal(providerItem.requirementId, fx.requirementId);
+  assert.equal(providerItem.slotId, "slot-1");
+  assert.equal(providerItem.metadata?.reason, "question");
+
+  await service.ackAttention(fx.projectId, providerItem.ref, NOW);
+  const afterAck = await service.computeAttention(fx.projectId, { now: NOW });
+  assert.equal(afterAck.items.some((item) => item.ref === providerItem.ref), false);
+});
+
 test("task-event-view keeps existing severity mapping after helper extraction", async () => {
   const fx = await fixture();
   await prisma.eventJournal.create({
@@ -269,3 +302,37 @@ test("task-event-view keeps existing severity mapping after helper extraction", 
   assert.equal(timeline.events[0]?.kind, "codex_receipt_ready");
   assert.equal(timeline.events[0]?.severity, "info");
 });
+
+async function writeProviderActivityFixture(projectRoot: string): Promise<void> {
+  await mkdir(join(projectRoot, ".ccb", "agents", "slot1_codex", "provider-runtime", "codex"), { recursive: true });
+  await writeFile(
+    join(projectRoot, ".ccb", "ccb.config"),
+    [
+      "version = 2",
+      'entry_window = "main"',
+      "",
+      "[windows]",
+      'slot-1 = "slot1_codex:codex"',
+      "",
+      "[agents.slot1_codex]",
+      'provider = "codex"',
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    join(projectRoot, ".ccb", "agents", "slot1_codex", "provider-runtime", "codex", "activity.json"),
+    JSON.stringify({
+      schema_version: 1,
+      record_type: "provider_activity",
+      agent_name: "slot1_codex",
+      provider: "codex",
+      state: "active",
+      event_name: "PreToolUse",
+      updated_at: "2026-06-06T12:00:00.000Z",
+      provider_session_id: "provider-session-question",
+      diagnostics: { tool_name: "AskUserQuestion" }
+    }),
+    "utf8"
+  );
+}
