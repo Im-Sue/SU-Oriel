@@ -17,6 +17,7 @@ import {
 } from "../../indexer/project-indexer.js";
 import { resolveProjectPath } from "../../lib/project-path.js";
 import { primitiveExecutor } from "../primitive/primitive-wrapper.js";
+import { reconcileCancelledRequirementProjection } from "../slot-binding/slot-binding.service.js";
 import { findRequirementMarkdown, RequirementEditNotFoundError } from "./requirement-edit.service.js";
 
 const DEFAULT_REQUIREMENT_REINDEX_DEBOUNCE_MS = 1_000;
@@ -102,6 +103,10 @@ export async function reindexRequirementFromMarkdown(
   const result = await prisma.$transaction(async (tx) => {
     await upsertDocumentProjectionAsync(tx, projectId, parsed);
     return await syncRequirementsFromMarkdown(tx, projectId, project.localPath, [parsed], [md.absolutePath]);
+  });
+  await reconcileCancelledRequirementProjection(prisma, {
+    projectId,
+    requirementId
   });
 
   return {

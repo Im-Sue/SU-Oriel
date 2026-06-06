@@ -2,6 +2,7 @@ import type { AnchorDispatchQueue, PrismaClient, SlotBinding } from "@prisma/cli
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import { prisma } from "../../db/prisma.js";
+import { AnchorDispatchQueuePolicyError } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
 import { JobSlotRouter } from "./job-slot-router.js";
 import { SLOT_IDS, SlotBindingService, type SlotId } from "./slot-binding.service.js";
@@ -304,16 +305,28 @@ export async function registerSlotRoutes(
       subject: "requirement",
       slot_id: slotId
     };
-    const result = await router.enqueue({
-      projectId,
-      requirementId: binding.requirementId,
-      subjectType: "requirement",
-      subjectId: binding.requirementId,
-      command: `/ccb:su-archive --payload ${JSON.stringify(payload)}`,
-      dispatchPayload: payload,
-      preferredSlotId: slotId,
-      reason: "sticky_slot_unavailable"
-    });
+    let result;
+    try {
+      result = await router.enqueue({
+        projectId,
+        requirementId: binding.requirementId,
+        subjectType: "requirement",
+        subjectId: binding.requirementId,
+        command: `/ccb:su-archive --payload ${JSON.stringify(payload)}`,
+        dispatchPayload: payload,
+        preferredSlotId: slotId,
+        reason: "sticky_slot_unavailable"
+      });
+    } catch (error) {
+      if (error instanceof AnchorDispatchQueuePolicyError) {
+        reply.status(error.statusCode);
+        return {
+          code: error.code,
+          message: error.message
+        };
+      }
+      throw error;
+    }
     reply.status(202);
     return {
       jobId: result.jobId,

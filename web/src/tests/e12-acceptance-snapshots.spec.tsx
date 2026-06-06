@@ -409,7 +409,7 @@ describe("E12 acceptance DOM baselines", () => {
     vi.mocked(consoleApi.fetchRequirements).mockResolvedValue([{ ...requirements[0], status: "planning" }]);
     const container = await renderRoute("/requirements", /Console v2 trace acceptance/);
     await screen.findByText("Console v2 trace acceptance");
-    expect(screen.getByText("已分析")).toBeInTheDocument();
+    expect(screen.getByText("规划中")).toBeInTheDocument();
     expectMainSnapshot(container);
   });
 

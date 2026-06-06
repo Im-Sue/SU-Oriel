@@ -135,7 +135,8 @@ export const CAPABILITY_OUTCOME_POLICIES = [
       "must_ask_9"
     ],
     "guards": [
-      "no_self_referential_event"
+      "no_self_referential_event",
+      "requirement_cancel_terminal_protection"
     ]
   },
   {
@@ -161,7 +162,35 @@ export const CAPABILITY_OUTCOME_POLICIES = [
       "must_ask_9"
     ],
     "guards": [
-      "no_self_referential_event"
+      "no_self_referential_event",
+      "requirement_defer_terminal_protection"
+    ]
+  },
+  {
+    "policy_id": "subtask.cancel:cancelled:subtask",
+    "capability_id": "subtask.cancel",
+    "outcome_type": "cancelled",
+    "subject_type": "subtask",
+    "write_target": "dev_task",
+    "state_effects": {
+      "status": "set:cancelled"
+    },
+    "evidence_required": {
+      "mode": "all",
+      "items": [
+        {
+          "kind": "A",
+          "source": "file",
+          "check_id": "file_exists"
+        }
+      ]
+    },
+    "must_ask_refs": [
+      "must_ask_9"
+    ],
+    "guards": [
+      "no_self_referential_event",
+      "subtask_cancel_terminal_protection"
     ]
   },
   {
@@ -174,12 +203,17 @@ export const CAPABILITY_OUTCOME_POLICIES = [
       "status": "set:delivered"
     },
     "evidence_required": {
-      "mode": "all",
+      "mode": "any",
       "items": [
         {
           "kind": "C",
           "source": "dev_task_scope",
           "check_id": "dev_task_scope_terminal"
+        },
+        {
+          "kind": "C",
+          "source": "dev_task_requirement",
+          "check_id": "dev_task_requirement_terminal"
         }
       ]
     },
@@ -213,31 +247,6 @@ export const CAPABILITY_OUTCOME_POLICIES = [
     "guards": [
       "no_self_referential_event",
       "requirement_promote_forward_only"
-    ]
-  },
-  {
-    "policy_id": "requirement.analyze:analyzed:requirement",
-    "capability_id": "requirement.analyze",
-    "outcome_type": "analyzed",
-    "subject_type": "requirement",
-    "write_target": "requirement_md",
-    "status": "disabled",
-    "state_effects": {
-      "status": "set:analyzed"
-    },
-    "evidence_required": {
-      "mode": "all",
-      "items": [
-        {
-          "kind": "A",
-          "source": "requirement_md",
-          "check_id": "schema_valid"
-        }
-      ]
-    },
-    "must_ask_refs": [],
-    "guards": [
-      "no_self_referential_event"
     ]
   }
 ] as const;

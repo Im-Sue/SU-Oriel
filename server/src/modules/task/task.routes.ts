@@ -20,6 +20,7 @@ import {
   updateTaskSchema
 } from "./task.schemas.js";
 import { serializeWorkspace } from "../workspace/workspace.routes.js";
+import { AnchorDispatchQueuePolicyError } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { JobSlotRouter } from "../slot-binding/job-slot-router.js";
 import { loadTaskMarkdownBody, TaskMarkdownNotFoundError } from "./task-markdown.service.js";
 
@@ -1020,6 +1021,13 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
         queuedAt: queued.queuedAt.toISOString()
       };
     } catch (error) {
+      if (error instanceof AnchorDispatchQueuePolicyError) {
+        reply.status(error.statusCode);
+        return {
+          code: error.code,
+          message: error.message
+        };
+      }
       const code = error instanceof Error ? error.message : "anchor_dispatch_failed";
       reply.status(code === "planning_anchor_missing" || code === "planning_anchor_paused" ? 409 : 500);
       return {
@@ -1057,6 +1065,13 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
         queuedAt: queued.queuedAt.toISOString()
       };
     } catch (error) {
+      if (error instanceof AnchorDispatchQueuePolicyError) {
+        reply.status(error.statusCode);
+        return {
+          code: error.code,
+          message: error.message
+        };
+      }
       const code = error instanceof Error ? error.message : "anchor_dispatch_failed";
       reply.status(code === "planning_anchor_missing" || code === "planning_anchor_paused" ? 409 : 500);
       return {

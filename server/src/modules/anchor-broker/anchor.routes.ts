@@ -7,6 +7,7 @@ import { prisma } from "../../db/prisma.js";
 import { assertLocalRequest } from "../ai-cli/ai-cli.guard.js";
 import { JobSlotRouter } from "../slot-binding/job-slot-router.js";
 import { SlotBindingService } from "../slot-binding/slot-binding.service.js";
+import { AnchorDispatchQueuePolicyError } from "./anchor-dispatch-queue-policy.js";
 import { MultiAnchorBrokerService } from "./broker.service.js";
 import { NativeAnchorTerminalService } from "../anchor-terminal/native-terminal.service.js";
 import type { NativeAnchorTerminalSpawnResult } from "../anchor-terminal/native-terminal.service.js";
@@ -400,15 +401,20 @@ export async function registerAnchorRoutes(
       payload: parsed.payload.payload
     });
     const dispatchPayload = readStructuredDispatchPayload(command);
-    const queued = await jobSlotRouter.enqueue({
-      projectId,
-      requirementId: requirement.id,
-      subjectType: "requirement",
-      subjectId: requirement.id,
-      command,
-      dispatchPayload,
-      step: normalizeDispatchStep(dispatchPayload.step)
-    });
+    const queuedResult = await enqueueOrReplyPolicyError(
+      reply,
+      jobSlotRouter.enqueue({
+        projectId,
+        requirementId: requirement.id,
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command,
+        dispatchPayload,
+        step: normalizeDispatchStep(dispatchPayload.step)
+      })
+    );
+    if (!queuedResult.ok) return queuedResult.body;
+    const queued = queuedResult.value;
     await markRequirementPlanningRuntime(requirement, queued.slotId ?? "slot-unassigned", "running");
     reply.status(202);
     return {
@@ -462,15 +468,20 @@ export async function registerAnchorRoutes(
       payload: parsed.payload.payload
     });
     const dispatchPayload = readStructuredDispatchPayload(command);
-    const queued = await jobSlotRouter.enqueue({
-      projectId: task.project.id,
-      requirementId: task.requirementId,
-      subjectType: "subtask",
-      subjectId: task.id,
-      command,
-      dispatchPayload,
-      step: normalizeDispatchStep(dispatchPayload.step)
-    });
+    const queuedResult = await enqueueOrReplyPolicyError(
+      reply,
+      jobSlotRouter.enqueue({
+        projectId: task.project.id,
+        requirementId: task.requirementId,
+        subjectType: "subtask",
+        subjectId: task.id,
+        command,
+        dispatchPayload,
+        step: normalizeDispatchStep(dispatchPayload.step)
+      })
+    );
+    if (!queuedResult.ok) return queuedResult.body;
+    const queued = queuedResult.value;
     reply.status(202);
     return {
       jobId: queued.jobId,
@@ -553,15 +564,20 @@ export async function registerAnchorRoutes(
       }
     });
     const dispatchPayload = readStructuredDispatchPayload(command);
-    const queued = await jobSlotRouter.enqueue({
-      projectId,
-      requirementId,
-      subjectType: "requirement",
-      subjectId: requirement.id,
-      command,
-      dispatchPayload,
-      step: "batch_execution"
-    });
+    const queuedResult = await enqueueOrReplyPolicyError(
+      reply,
+      jobSlotRouter.enqueue({
+        projectId,
+        requirementId,
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command,
+        dispatchPayload,
+        step: "batch_execution"
+      })
+    );
+    if (!queuedResult.ok) return queuedResult.body;
+    const queued = queuedResult.value;
 
     reply.status(202);
     return {
@@ -768,6 +784,28 @@ export async function registerAnchorRoutes(
       }
     });
   }
+}
+
+async function enqueueOrReplyPolicyError<T>(
+  reply: FastifyReply,
+  enqueue: Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false; body: Record<string, unknown> }> {
+  try {
+    return { ok: true, value: await enqueue };
+  } catch (error) {
+    if (error instanceof AnchorDispatchQueuePolicyError) {
+      reply.status(error.statusCode);
+      return { ok: false, body: anchorDispatchPolicyErrorBody(error) };
+    }
+    throw error;
+  }
+}
+
+function anchorDispatchPolicyErrorBody(error: AnchorDispatchQueuePolicyError): Record<string, unknown> {
+  return {
+    code: error.code,
+    message: error.message
+  };
 }
 
 function anchorKindError(task: AnchorableTask): string | null {

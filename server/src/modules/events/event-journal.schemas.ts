@@ -80,7 +80,7 @@ const slotReleasedPayloadSchema = z
   .object({
     slotId: nonEmptyStringSchema,
     requirementId: nonEmptyStringSchema,
-    reason: z.enum(["requirement_archived", "manual_release", "force_release"]),
+    reason: z.enum(["requirement_archived", "requirement_cancelled", "manual_release", "force_release"]),
     releasedBy: z.enum(["system", "user"]),
     operatorReason: nullableNonEmptyStringSchema.optional()
   })

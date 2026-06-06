@@ -29,7 +29,7 @@ export const BADGE_MAP = {
   done: { label: "完成", color: "green" },
   cancelled: { label: "已取消", color: "red" },
   "req-draft": { label: "草稿", color: "gray" },
-  "req-analyzed": { label: "已分析", color: "blue" },
+  "req-planning": { label: "规划中", color: "blue" },
   "req-delivering": { label: "推进中", color: "orange" },
   "req-delivered": { label: "已交付", color: "green" },
   "req-deferred": { label: "已暂缓", color: "gray" },
@@ -244,8 +244,7 @@ export function getRequirementStatusBadge(status: string): { label: string; colo
     case "draft":
       return BADGE_MAP["req-draft"];
     case "planning":
-    case "analyzed":
-      return BADGE_MAP["req-analyzed"];
+      return BADGE_MAP["req-planning"];
     case "delivering":
       return BADGE_MAP["req-delivering"];
     case "delivered":

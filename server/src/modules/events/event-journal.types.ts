@@ -134,7 +134,7 @@ export interface SlotBoundPayload {
 export interface SlotReleasedPayload {
   slotId: string;
   requirementId: string;
-  reason: "requirement_archived" | "manual_release" | "force_release";
+  reason: "requirement_archived" | "requirement_cancelled" | "manual_release" | "force_release";
   releasedBy: "system" | "user";
   operatorReason?: string | null;
 }

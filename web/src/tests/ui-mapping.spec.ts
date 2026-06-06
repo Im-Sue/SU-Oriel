@@ -9,7 +9,7 @@ import {
 describe("getRequirementStatusBadge", () => {
   it.each([
     ["draft", "草稿", "gray"],
-    ["analyzed", "已分析", "blue"],
+    ["planning", "规划中", "blue"],
     ["delivering", "推进中", "orange"],
     ["delivered", "已交付", "green"],
     ["deferred", "已暂缓", "gray"],

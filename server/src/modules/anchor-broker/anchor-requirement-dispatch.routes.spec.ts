@@ -202,6 +202,202 @@ test("POST /api/projects/:projectId/requirements/:requirementId/anchor-dispatch 
   }
 });
 
+test("POST /api/projects/:projectId/requirements/:requirementId/anchor-dispatch rejects new work while su-cancel is active", async () => {
+  const { project, requirement } = await createRequirementFixture();
+  await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: `job-cancel-${randomUUID()}`,
+      anchorId: "slot-1",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: "su-cancel",
+      status: "pending"
+    }
+  });
+  const app = buildApp({ enableFileWatcher: false });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/requirements/${requirement.id}/anchor-dispatch`,
+      payload: {
+        command: "su-flow",
+        payload: {
+          step: "analysis"
+        }
+      }
+    });
+
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(response.json().code, "cancel_in_progress");
+    assert.equal(await prisma.anchorDispatchQueue.count(), 1);
+  } finally {
+    await app.close();
+  }
+});
+
+test("POST /api/projects/:projectId/requirements/:requirementId/anchor-dispatch blocks cancelled requirements except cancel/reactivate", async () => {
+  const first = await createRequirementFixture();
+  const second = await createRequirementFixture();
+  await prisma.requirement.updateMany({
+    where: {
+      id: {
+        in: [first.requirement.id, second.requirement.id]
+      }
+    },
+    data: {
+      status: "cancelled"
+    }
+  });
+  await prisma.anchorDispatchQueue.createMany({
+    data: [
+      {
+        jobId: `job-stale-cancel-${randomUUID()}`,
+        anchorId: "slot-1",
+        subjectType: "requirement",
+        subjectId: first.requirement.id,
+        command: "/ccb:su-cancel --payload {}",
+        status: "submitted"
+      },
+      {
+        jobId: `job-stale-reactivate-${randomUUID()}`,
+        anchorId: "slot-2",
+        subjectType: "requirement",
+        subjectId: second.requirement.id,
+        command: "/ccb:su-cancel --payload {}",
+        status: "submitted"
+      }
+    ]
+  });
+  const app = buildApp({ enableFileWatcher: false });
+
+  try {
+    const blocked = await app.inject({
+      method: "POST",
+      url: `/api/projects/${first.project.id}/requirements/${first.requirement.id}/anchor-dispatch`,
+      payload: {
+        command: "su-flow",
+        payload: {
+          step: "analysis"
+        }
+      }
+    });
+    assert.equal(blocked.statusCode, 409, blocked.body);
+    assert.equal(blocked.json().code, "requirement_cancelled");
+
+    const cancelAllowed = await app.inject({
+      method: "POST",
+      url: `/api/projects/${first.project.id}/requirements/${first.requirement.id}/anchor-dispatch`,
+      payload: {
+        command: "su-cancel",
+        payload: {}
+      }
+    });
+    assert.equal(cancelAllowed.statusCode, 202, cancelAllowed.body);
+
+    const reactivateAllowed = await app.inject({
+      method: "POST",
+      url: `/api/projects/${second.project.id}/requirements/${second.requirement.id}/anchor-dispatch`,
+      payload: {
+        command: "su-reactivate",
+        payload: {}
+      }
+    });
+    assert.equal(reactivateAllowed.statusCode, 202, reactivateAllowed.body);
+  } finally {
+    await app.close();
+  }
+});
+
+test("POST /api/projects/:projectId/requirements/:requirementId/anchor-dispatch supersedes same-scope pending work when su-cancel is queued", async () => {
+  const { project, requirement } = await createRequirementFixture();
+  const task = await prisma.task.create({
+    data: {
+      projectId: project.id,
+      requirementId: requirement.id,
+      taskKey: `subtask-${randomUUID()}`,
+      title: "Pending child task",
+      status: "reviewing",
+      currentNode: "dispatch"
+    }
+  });
+  const otherRequirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Other requirement",
+      description: "Other scope",
+      status: "planning"
+    }
+  });
+  await prisma.anchorDispatchQueue.createMany({
+    data: [
+      {
+        jobId: "job-requirement-pending",
+        anchorId: "slot-1",
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command: "/ccb:su-flow --payload {}",
+        status: "pending"
+      },
+      {
+        jobId: "job-subtask-pending",
+        anchorId: "slot-1",
+        subjectType: "subtask",
+        subjectId: task.id,
+        command: "/ccb:su-dispatch --payload {}",
+        status: "pending"
+      },
+      {
+        jobId: "job-submitted",
+        anchorId: "slot-1",
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command: "/ccb:su-flow --payload {}",
+        status: "submitted"
+      },
+      {
+        jobId: "job-other-scope",
+        anchorId: "slot-2",
+        subjectType: "requirement",
+        subjectId: otherRequirement.id,
+        command: "/ccb:su-flow --payload {}",
+        status: "pending"
+      }
+    ]
+  });
+  const app = buildApp({ enableFileWatcher: false });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/requirements/${requirement.id}/anchor-dispatch`,
+      payload: {
+        command: "su-cancel",
+        payload: {
+          reason: "not needed"
+        }
+      }
+    });
+
+    assert.equal(response.statusCode, 202, response.body);
+    const rows = await prisma.anchorDispatchQueue.findMany({
+      where: {
+        jobId: {
+          in: ["job-requirement-pending", "job-subtask-pending", "job-submitted", "job-other-scope", response.json().jobId]
+        }
+      }
+    });
+    const byJobId = new Map(rows.map((row) => [row.jobId, row]));
+    assert.equal(byJobId.get("job-requirement-pending")?.status, "superseded");
+    assert.equal(byJobId.get("job-subtask-pending")?.status, "superseded");
+    assert.equal(byJobId.get("job-submitted")?.status, "submitted");
+    assert.equal(byJobId.get("job-other-scope")?.status, "pending");
+    assert.equal(byJobId.get(response.json().jobId)?.status, "pending");
+  } finally {
+    await app.close();
+  }
+});
+
 test("POST /api/projects/:projectId/requirements/:requirementId/anchor-dispatch ignores paused legacy planning anchors and uses the sticky slot", async () => {
   const { project, requirement } = await createRequirementFixture();
   await prisma.anchorAllocation.create({

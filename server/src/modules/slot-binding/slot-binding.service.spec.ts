@@ -7,7 +7,11 @@ import { beforeEach, test } from "vitest";
 
 import { prisma } from "../../db/prisma.js";
 import { JobSlotRouter } from "./job-slot-router.js";
-import { SlotBindingService } from "./slot-binding.service.js";
+import {
+  reconcileCancelledRequirementProjection,
+  SlotBindingService,
+  updateSlotActivityForCapabilityOutcome
+} from "./slot-binding.service.js";
 
 async function resetDatabase(): Promise<void> {
   await prisma.anchorDispatchQueue.deleteMany();
@@ -221,4 +225,178 @@ test("SlotBindingService release callback drains the oldest queued requirement i
   assert.equal(rebound.requirementId, requirements[3].id);
   assert.equal(rebound.state, "bound");
   assert.equal(await prisma.eventJournal.count({ where: { eventType: "slot_queued_request" } }), 1);
+});
+
+test("reconcileCancelledRequirementProjection releases non-busy slot and supersedes same-scope pending dispatches", async () => {
+  const { project, requirements } = await createProjectWithRequirements(2);
+  const requirement = await prisma.requirement.update({
+    where: { id: requirements[0].id },
+    data: { status: "cancelled" }
+  });
+  const task = await prisma.task.create({
+    data: {
+      projectId: project.id,
+      requirementId: requirement.id,
+      taskKey: `cancel-reconcile-${randomUUID()}`,
+      title: "Cancelled child",
+      status: "reviewing",
+      currentNode: "dispatch"
+    }
+  });
+  await prisma.slotBinding.create({
+    data: {
+      projectId: project.id,
+      slotId: "slot-1",
+      requirementId: requirement.id,
+      state: "bound",
+      boundAt: new Date("2026-06-06T10:00:00.000Z"),
+      lastActivityAt: new Date("2026-06-06T10:00:00.000Z")
+    }
+  });
+  await prisma.anchorDispatchQueue.createMany({
+    data: [
+      {
+        jobId: "job-reconcile-requirement",
+        anchorId: "slot-1",
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command: "/ccb:su-flow --payload {}",
+        status: "pending"
+      },
+      {
+        jobId: "job-reconcile-subtask",
+        anchorId: "slot-1",
+        subjectType: "subtask",
+        subjectId: task.id,
+        command: "/ccb:su-dispatch --payload {}",
+        status: "pending"
+      },
+      {
+        jobId: "job-reconcile-cancel",
+        anchorId: "slot-1",
+        subjectType: "requirement",
+        subjectId: requirement.id,
+        command: "/ccb:su-cancel --payload {}",
+        status: "pending"
+      }
+    ]
+  });
+
+  const result = await reconcileCancelledRequirementProjection(prisma, {
+    projectId: project.id,
+    requirementId: requirement.id
+  });
+
+  assert.equal(result.requirementCancelled, true);
+  assert.equal(result.superseded, 2);
+  assert.deepEqual(result.releasedSlotIds, ["slot-1"]);
+  const binding = await prisma.slotBinding.findUniqueOrThrow({
+    where: {
+      projectId_slotId: {
+        projectId: project.id,
+        slotId: "slot-1"
+      }
+    }
+  });
+  assert.equal(binding.state, "idle");
+  assert.equal(binding.requirementId, null);
+  const requirementRow = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { jobId: "job-reconcile-requirement" } });
+  const subtaskRow = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { jobId: "job-reconcile-subtask" } });
+  const cancelRow = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { jobId: "job-reconcile-cancel" } });
+  assert.equal(requirementRow.status, "superseded");
+  assert.equal(subtaskRow.status, "superseded");
+  assert.equal(cancelRow.status, "pending");
+  const releaseEvent = await prisma.eventJournal.findFirstOrThrow({ where: { eventType: "slot_released" } });
+  assert.equal(JSON.parse(releaseEvent.payloadJson).reason, "requirement_cancelled");
+});
+
+test("reconcileCancelledRequirementProjection does not release busy slots before the current job yields", async () => {
+  const { project, requirements } = await createProjectWithRequirements(1);
+  const requirement = await prisma.requirement.update({
+    where: { id: requirements[0].id },
+    data: { status: "cancelled" }
+  });
+  await prisma.slotBinding.create({
+    data: {
+      projectId: project.id,
+      slotId: "slot-1",
+      requirementId: requirement.id,
+      state: "busy",
+      boundAt: new Date("2026-06-06T10:00:00.000Z"),
+      busySince: new Date("2026-06-06T10:01:00.000Z")
+    }
+  });
+  await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job-busy-reconcile",
+      anchorId: "slot-1",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: "/ccb:su-flow --payload {}",
+      status: "pending"
+    }
+  });
+
+  const result = await reconcileCancelledRequirementProjection(prisma, {
+    projectId: project.id,
+    requirementId: requirement.id
+  });
+
+  assert.deepEqual(result.busySlotIds, ["slot-1"]);
+  assert.deepEqual(result.releasedSlotIds, []);
+  const binding = await prisma.slotBinding.findUniqueOrThrow({
+    where: {
+      projectId_slotId: {
+        projectId: project.id,
+        slotId: "slot-1"
+      }
+    }
+  });
+  assert.equal(binding.state, "busy");
+  assert.equal(binding.requirementId, requirement.id);
+  assert.equal(await prisma.eventJournal.count({ where: { eventType: "slot_released" } }), 0);
+  const queued = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { jobId: "job-busy-reconcile" } });
+  assert.equal(queued.status, "superseded");
+});
+
+test("updateSlotActivityForCapabilityOutcome releases a busy slot after requirement.cancel outcome is projected", async () => {
+  const { project, requirements } = await createProjectWithRequirements(1);
+  const requirement = await prisma.requirement.update({
+    where: { id: requirements[0].id },
+    data: { status: "cancelled" }
+  });
+  await prisma.slotBinding.create({
+    data: {
+      projectId: project.id,
+      slotId: "slot-1",
+      requirementId: requirement.id,
+      state: "busy",
+      boundAt: new Date("2026-06-06T10:00:00.000Z"),
+      busySince: new Date("2026-06-06T10:01:00.000Z"),
+      lastActivityAt: new Date("2026-06-06T10:00:00.000Z")
+    }
+  });
+
+  const updated = await updateSlotActivityForCapabilityOutcome(prisma, {
+    projectId: project.id,
+    subjectType: "requirement",
+    subjectId: requirement.id,
+    emittedAt: new Date("2026-06-06T10:02:00.000Z"),
+    capabilityId: "requirement.cancel",
+    outcomeType: "cancelled"
+  });
+
+  assert.equal(updated, 1);
+  const binding = await prisma.slotBinding.findUniqueOrThrow({
+    where: {
+      projectId_slotId: {
+        projectId: project.id,
+        slotId: "slot-1"
+      }
+    }
+  });
+  assert.equal(binding.state, "idle");
+  assert.equal(binding.requirementId, null);
+  assert.equal(binding.busySince, null);
+  assert.equal(await prisma.eventJournal.count({ where: { eventType: "slot_released" } }), 1);
 });

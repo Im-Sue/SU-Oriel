@@ -10,7 +10,10 @@ import { primitiveExecutor } from "../modules/primitive/primitive-wrapper.js";
 import { breakdownDraftSchema, type BreakdownDraft } from "../modules/breakdown-draft/breakdown-draft.schema.js";
 import { hashRequirementAnalysisInput } from "../modules/requirement/requirement-analysis-hash.js";
 import { rollupAllRequirementsForProject } from "../modules/requirement/requirement-status-rollup.js";
-import { updateSlotActivityForCapabilityOutcome } from "../modules/slot-binding/slot-binding.service.js";
+import {
+  reconcileCancelledRequirementProjectionsForProject,
+  updateSlotActivityForCapabilityOutcome
+} from "../modules/slot-binding/slot-binding.service.js";
 import {
   getExplicitRequirementStatus,
   normalizeRequirementAnalysisProjectionFields,
@@ -552,6 +555,7 @@ export async function scanProject(
           `requirement md 同步完成，upserted=${upsertedCount}`
         );
       }
+      await reconcileCancelledRequirementProjectionsForProject(prisma, projectId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "requirement md 同步失败";
       await finishSyncJob(prisma, requirementSyncJob.id, "failed", "requirement md 同步失败", message);
@@ -1770,11 +1774,19 @@ async function syncPluginEventJournal(
         })
     );
     if (normalized.event.eventType === "capability_outcome_applied") {
+      const capabilityId = typeof normalized.event.payload.capability_id === "string"
+        ? normalized.event.payload.capability_id
+        : null;
+      const outcomeType = typeof normalized.event.payload.outcome_type === "string"
+        ? normalized.event.payload.outcome_type
+        : null;
       await updateSlotActivityForCapabilityOutcome(prisma, {
         projectId,
         subjectType: normalized.event.subjectType,
         subjectId: normalized.event.subjectId,
-        emittedAt: normalized.event.emittedAt
+        emittedAt: normalized.event.emittedAt,
+        capabilityId,
+        outcomeType
       });
     }
     projectedCount += 1;

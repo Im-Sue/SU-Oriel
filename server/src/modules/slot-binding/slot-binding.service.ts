@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient, SlotBinding } from "@prisma/client";
 
 import { prisma } from "../../db/prisma.js";
+import { supersedePendingRequirementDispatches } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { emitEventInTransaction } from "../events/event-journal.service.js";
 import {
   createDefaultSlotContextResetter,
@@ -22,7 +23,7 @@ export type BindRequirementInput = {
 export type ReleaseSlotInput = {
   projectId: string;
   slotId: SlotId;
-  reason: "requirement_archived" | "manual_release" | "force_release";
+  reason: "requirement_archived" | "requirement_cancelled" | "manual_release" | "force_release";
   releasedBy: "system" | "user";
   operatorReason?: string | null;
 };
@@ -378,9 +379,13 @@ export async function updateSlotActivityForCapabilityOutcome(
     subjectType: string;
     subjectId: string;
     emittedAt: Date;
+    capabilityId?: string | null;
+    outcomeType?: string | null;
   }
 ): Promise<number> {
   const resolved = await findRequirementIdForSubject(client, input.subjectType, input.subjectId);
+  const service = new SlotBindingService(client);
+  let activityScope: { projectId: string; requirementId: string } | null = null;
   if (!resolved || resolved.projectId !== input.projectId) {
     if (input.subjectType === "subtask") {
       const task = await client.task.findUnique({
@@ -388,19 +393,119 @@ export async function updateSlotActivityForCapabilityOutcome(
         select: { projectId: true, requirementId: true }
       });
       if (!task?.requirementId || task.projectId !== input.projectId) return 0;
-      return await new SlotBindingService(client).updateActivityForRequirement({
-        projectId: input.projectId,
-        requirementId: task.requirementId,
-        at: input.emittedAt
-      });
+      activityScope = { projectId: input.projectId, requirementId: task.requirementId };
+    } else {
+      return 0;
     }
-    return 0;
+  } else {
+    activityScope = { projectId: resolved.projectId, requirementId: resolved.requirementId };
   }
-  return await new SlotBindingService(client).updateActivityForRequirement({
-    projectId: resolved.projectId,
-    requirementId: resolved.requirementId,
+
+  const updated = await service.updateActivityForRequirement({
+    projectId: activityScope.projectId,
+    requirementId: activityScope.requirementId,
     at: input.emittedAt
   });
+  if (input.capabilityId === "requirement.cancel" && input.outcomeType === "cancelled") {
+    await reconcileCancelledRequirementProjection(client, activityScope);
+  }
+  return updated;
+}
+
+export type CancelledRequirementProjectionReconcileResult = {
+  requirementCancelled: boolean;
+  superseded: number;
+  releasedSlotIds: string[];
+  busySlotIds: string[];
+};
+
+export async function reconcileCancelledRequirementProjection(
+  client: PrismaClient,
+  input: {
+    projectId: string;
+    requirementId: string;
+  }
+): Promise<CancelledRequirementProjectionReconcileResult> {
+  const requirement = await client.requirement.findFirst({
+    where: {
+      id: input.requirementId,
+      projectId: input.projectId
+    },
+    select: {
+      status: true
+    }
+  });
+  if (requirement?.status !== "cancelled") {
+    return {
+      requirementCancelled: false,
+      superseded: 0,
+      releasedSlotIds: [],
+      busySlotIds: []
+    };
+  }
+
+  const superseded = await supersedePendingRequirementDispatches(client, input);
+  const bindings = await client.slotBinding.findMany({
+    where: {
+      projectId: input.projectId,
+      requirementId: input.requirementId
+    },
+    orderBy: {
+      updatedAt: "desc"
+    }
+  });
+  const releasedSlotIds: string[] = [];
+  const busySlotIds: string[] = [];
+  const service = new SlotBindingService(client);
+
+  for (const binding of bindings) {
+    if (!isSlotId(binding.slotId)) {
+      continue;
+    }
+    if (binding.state === "busy") {
+      busySlotIds.push(binding.slotId);
+      continue;
+    }
+    const released = await service.releaseSlot({
+      projectId: input.projectId,
+      slotId: binding.slotId,
+      reason: "requirement_cancelled",
+      releasedBy: "system"
+    });
+    releasedSlotIds.push(released.slotId);
+  }
+
+  return {
+    requirementCancelled: true,
+    superseded,
+    releasedSlotIds,
+    busySlotIds
+  };
+}
+
+export async function reconcileCancelledRequirementProjectionsForProject(
+  client: PrismaClient,
+  projectId: string
+): Promise<CancelledRequirementProjectionReconcileResult[]> {
+  const requirements = await client.requirement.findMany({
+    where: {
+      projectId,
+      status: "cancelled"
+    },
+    select: {
+      id: true
+    }
+  });
+  const results: CancelledRequirementProjectionReconcileResult[] = [];
+  for (const requirement of requirements) {
+    results.push(
+      await reconcileCancelledRequirementProjection(client, {
+        projectId,
+        requirementId: requirement.id
+      })
+    );
+  }
+  return results;
 }
 
 function appendHistory(historyJson: string, entry: Record<string, unknown>): string {

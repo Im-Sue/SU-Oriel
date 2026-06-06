@@ -3,6 +3,11 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { AnchorDispatchQueue, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../db/prisma.js";
+import {
+  enforceRequirementDispatchQueuePolicy,
+  isCancelDispatchCommand,
+  supersedePendingRequirementDispatches
+} from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
 import { emitEventInTransaction } from "../events/event-journal.service.js";
 import { SlotBindingService, type SlotId, isSlotId } from "./slot-binding.service.js";
@@ -66,6 +71,12 @@ export class JobSlotRouter {
   async enqueue(input: SlotQueuedRequest): Promise<JobSlotRouterResult> {
     const jobId = input.jobId ?? createSlotDispatchJobId();
     const queuedAt = input.requestedAt ?? new Date();
+    await enforceRequirementDispatchQueuePolicy(this.client, {
+      projectId: input.projectId,
+      requirementId: input.requirementId,
+      command: input.command,
+      ignoreJobId: jobId
+    });
     const slot = await this.resolveOrClaimSlot(input);
     if (!slot || slot.state === "unhealthy" || slot.state === "recovering" || slot.state === "draining") {
       await this.recordQueuedRequest({
@@ -227,6 +238,19 @@ export class JobSlotRouter {
     reason: "no_idle_slot" | "sticky_slot_unavailable" | "slot_recovering";
   }) {
     return await this.client.$transaction(async (tx) => {
+      await enforceRequirementDispatchQueuePolicy(tx, {
+        projectId: input.projectId,
+        requirementId: input.requirementId,
+        command: input.command,
+        ignoreJobId: input.jobId
+      });
+      if (isCancelDispatchCommand(input.command)) {
+        await supersedePendingRequirementDispatches(tx, {
+          projectId: input.projectId,
+          requirementId: input.requirementId,
+          ignoreJobId: input.jobId
+        });
+      }
       const row = await tx.anchorDispatchQueue.upsert({
         where: { jobId: input.jobId },
         create: {

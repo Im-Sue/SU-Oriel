@@ -131,11 +131,15 @@ export async function registerPluginHookRoutes(
     }
 
     if (parsed.data.event.type === "capability_outcome_applied") {
+      const capabilityId = payloadString(parsed.data.event.payload, "capability_id") ?? null;
+      const outcomeType = payloadString(parsed.data.event.payload, "outcome_type") ?? null;
       await updateSlotActivityForCapabilityOutcome(db, {
         projectId: project.id,
         subjectType: parsed.data.event.subject_type,
         subjectId: parsed.data.event.subject_id,
-        emittedAt: new Date(parsed.data.event.emitted_at)
+        emittedAt: new Date(parsed.data.event.emitted_at),
+        capabilityId,
+        outcomeType
       });
     }
 
