@@ -6,7 +6,7 @@ import type {
   SlotBinding
 } from "@prisma/client";
 
-import { getTaskEventSeverity, type AttentionSeverity } from "./attention-severity.js";
+import type { AttentionSeverity } from "./attention-severity.js";
 import type { AttentionCta, AttentionItem, AttentionKind } from "./attention-inbox.types.js";
 
 export interface AttentionTaskContext {
@@ -298,9 +298,9 @@ function projectPendingUserDecision(
 }
 
 function eventSeverity(eventType: string): AttentionSeverity {
-  if (eventType === "codex_receipt_ready") return getTaskEventSeverity("codex_receipt_ready");
-  if (eventType === "codex_rejected") return getTaskEventSeverity("codex_rejected");
-  if (eventType === "state_write_conflict") return getTaskEventSeverity("state_write_conflict");
+  if (Object.prototype.hasOwnProperty.call(EVENT_JOURNAL_ATTENTION_KINDS, eventType)) {
+    return "attention";
+  }
   return "warning";
 }
 
