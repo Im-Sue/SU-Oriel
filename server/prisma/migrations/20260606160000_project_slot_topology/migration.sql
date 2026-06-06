@@ -1,0 +1,2 @@
+ALTER TABLE "Project" ADD COLUMN "slotCount" INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE "Project" ADD COLUMN "slotAgentOverridesJson" TEXT;
