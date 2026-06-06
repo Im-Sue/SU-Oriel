@@ -58,10 +58,10 @@ export async function computeRequirementAggregation(
   // 状态推算
   // 只看"有效"桶（archive / dispatch|implementation|review / cancelled）；
   // currentNode 缺失或处于规划态（None / requirement_analysis / technical_design / task_breakdown / planning）的子任务
-  // 视为"未派工"，不阻断 delivered 判定也不算 in-progress（避免数据脏 / migration 占位长期卡住状态）。
-  // 修复 bug 1（直挂 subtask 永远不能 delivered）+ bug 2（archive 被算入 active）。
+  // 视为"未派工"，不算 in-progress（避免数据脏 / migration 占位长期卡住状态）。
+  // delivered 严格镜像 canonical Requirement.status，不再仅凭全子任务 archive 推导。
   let computedStatus = req.status as RequirementAggregation["status"];
-  if (req.status !== "cancelled" && req.status !== "deferred") {
+  if (req.status !== "cancelled" && req.status !== "deferred" && req.status !== "delivered") {
     const validActiveDirect = directSubtasks.filter(
       (s) =>
         s.status !== "cancelled" &&
@@ -70,17 +70,9 @@ export async function computeRequirementAggregation(
     );
     const archivedDirectCount = validActiveDirect.filter((s) => s.currentNode === "archive").length;
     const inProgressDirectCount = validActiveDirect.length - archivedDirectCount;
-    const cancelledDirectCount = directSubtasks.filter((s) => s.status === "cancelled").length;
-
-    const directConcluded =
-      validActiveDirect.length === 0 || archivedDirectCount === validActiveDirect.length;
     const hasArchive = archivedDirectCount > 0;
-    const hasAnyWork =
-      validActiveDirect.length > 0 || cancelledDirectCount > 0;
 
-    if (hasAnyWork && directConcluded && hasArchive) {
-      computedStatus = "delivered";
-    } else if (inProgressDirectCount > 0 || hasArchive) {
+    if (inProgressDirectCount > 0 || hasArchive) {
       computedStatus = "delivering";
     }
   }

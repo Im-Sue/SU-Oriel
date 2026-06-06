@@ -87,11 +87,11 @@ describe("progress-aggregation", () => {
     expect(agg?.directSubtaskCount).toBe(2);
   });
 
-  it("marks requirement delivered when all valid active subtasks are archived", async () => {
+  it("keeps canonical delivering when all valid active subtasks are archived", async () => {
     const requirement = await prisma.requirement.create({
       data: {
         projectId,
-        title: "delivered req",
+        title: "merged preview req",
         description: "archive + legacy backlog",
         status: "delivering",
         source: "test"
@@ -120,9 +120,36 @@ describe("progress-aggregation", () => {
 
     const agg = await computeRequirementAggregation(prisma, requirement.id);
 
-    expect(agg?.status).toBe("delivered");
+    expect(agg?.status).toBe("delivering");
     expect(agg?.progress).toBe(50);
     expect(agg?.backlogCount).toBe(1);
+  });
+
+  it("mirrors canonical delivered status", async () => {
+    const requirement = await prisma.requirement.create({
+      data: {
+        projectId,
+        title: "canonical delivered req",
+        description: "archive + canonical delivered",
+        status: "delivered",
+        source: "test"
+      }
+    });
+    await prisma.task.create({
+      data: {
+        projectId,
+        taskKey: `2026-05-19-progress-canonical-delivered-${Date.now()}`,
+        title: "archived direct",
+        requirementId: requirement.id,
+        currentNode: "archive",
+        progress: 100
+      }
+    });
+
+    const agg = await computeRequirementAggregation(prisma, requirement.id);
+
+    expect(agg?.status).toBe("delivered");
+    expect(agg?.progress).toBe(100);
   });
 
   it("keeps terminal large-state statuses explicit", async () => {
