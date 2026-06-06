@@ -140,6 +140,52 @@
   color: #78350f;
 }
 
+.bannerInfo {
+  background: #dbeafe;
+  border-left: 3px solid #3b82f6;
+  color: #1e3a8a;
+}
+
+.bannerError {
+  background: #fee2e2;
+  border-left: 3px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.bannerActionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cancelConfirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cancelImpactList {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary, #475569);
+}
+
+.cancelBusyHint {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  color: #78350f;
+}
+
 .workspace {
   display: grid;
   align-items: start;

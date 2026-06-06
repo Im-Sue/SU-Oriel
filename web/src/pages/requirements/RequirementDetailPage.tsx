@@ -84,6 +84,15 @@ interface PendingAnchorDispatch {
   title?: string;
 }
 
+// su-cancel 派出后的终态反馈跟踪：queued（已排队）→ executing（slot 已接管）→
+// 投影 status=cancelled 收敛（清空）或 capability_outcome_rejected 转 failed。
+interface CancelTrackingState {
+  jobId: string;
+  phase: "queued" | "executing" | "failed";
+  message?: string;
+  startedAt: string;
+}
+
 const ARTIFACT_TOTAL = 4;
 const DEFERABLE_REQUIREMENT_STATUSES = new Set(["drafting", "planning", "delivering"]);
 const REACTIVATABLE_REQUIREMENT_STATUSES = new Set(["cancelled", "deferred"]);
@@ -350,6 +359,8 @@ export function RequirementDetailPage() {
   const [subtaskBatchSubmitting, setSubtaskBatchSubmitting] = useState(false);
   const [lifecycleMenuOpen, setLifecycleMenuOpen] = useState(false);
   const [confirmLifecycleAction, setConfirmLifecycleAction] = useState<LifecycleAction | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelTracking, setCancelTracking] = useState<CancelTrackingState | null>(null);
   const [requirementSlot, setRequirementSlot] = useState<SlotLaneView | null>(null);
   const [slotReleaseDraft, setSlotReleaseDraft] = useState<SlotReleaseDraft | null>(null);
   const [designDocumentState, setDesignDocumentState] = useState<DesignDocumentState>({ status: "idle" });
@@ -360,6 +371,7 @@ export function RequirementDetailPage() {
   const isFetchingRef = useRef(false);
   const reindexRefreshInFlightRef = useRef(false);
   const pendingDispatchesRef = useRef<PendingAnchorDispatch[]>([]);
+  const cancelTrackingRef = useRef<CancelTrackingState | null>(null);
   const designDocumentRequestRef = useRef<DesignDocumentRequest | null>(null);
   const designDocumentRequestSeqRef = useRef(0);
   const aiMarkdownRequestSeqRef = useRef(0);
@@ -368,6 +380,10 @@ export function RequirementDetailPage() {
   useEffect(() => {
     pendingDispatchesRef.current = pendingDispatches;
   }, [pendingDispatches]);
+
+  useEffect(() => {
+    cancelTrackingRef.current = cancelTracking;
+  }, [cancelTracking]);
 
   const refreshRequirementSlot = useCallback(async () => {
     if (!requirementId || !selectedProjectId) return;
@@ -456,6 +472,13 @@ export function RequirementDetailPage() {
           } else {
             addToast("success", `已派出 /ccb:${item.dispatch.command}：${item.dispatch.jobId}`);
           }
+          if (item.dispatch.command === "su-cancel") {
+            setCancelTracking((current) =>
+              current && current.jobId === item.dispatch.jobId && current.phase === "queued"
+                ? { ...current, phase: "executing" }
+                : current
+            );
+          }
         } else {
           const message =
             typeof item.event.payload.errorMessage === "string"
@@ -467,6 +490,11 @@ export function RequirementDetailPage() {
               ? `子任务派出失败：${message}。请到 Slots 页确认 slot 状态后手动重试`
               : `派出失败：${message}。请到 Slots 页确认 slot 状态后手动重试`
           );
+          if (item.dispatch.command === "su-cancel") {
+            setCancelTracking((current) =>
+              current && current.jobId === item.dispatch.jobId ? { ...current, phase: "failed", message } : current
+            );
+          }
         }
       }
       if (selectedProjectId) {
@@ -476,6 +504,36 @@ export function RequirementDetailPage() {
       // EventJournal 轮询失败不阻断详情刷新；下一轮轮询会继续尝试。
     }
   }, [addToast, loadProjectData, requirementId, selectedProjectId]);
+
+  const reconcileCancelTracking = useCallback(async () => {
+    const tracking = cancelTrackingRef.current;
+    if (!requirementId || !tracking || tracking.phase === "failed") return;
+    try {
+      const result = await fetchEventJournalEvents({
+        subjectType: "requirement",
+        subjectId: requirementId,
+        limit: 20
+      });
+      const rejected = result.items.find(
+        (event) =>
+          event.eventType === "capability_outcome_rejected" &&
+          String(event.payload.capability_id ?? "") === "requirement.cancel" &&
+          event.emittedAt >= tracking.startedAt
+      );
+      if (!rejected) return;
+      const issues = Array.isArray(rejected.payload.issues)
+        ? rejected.payload.issues.filter((issue): issue is string => typeof issue === "string")
+        : [];
+      const code = typeof rejected.payload.code === "string" ? rejected.payload.code : null;
+      const message = issues[0] ?? code ?? "取消被拒绝";
+      setCancelTracking((current) =>
+        current && current.jobId === tracking.jobId ? { ...current, phase: "failed", message } : current
+      );
+      addToast("error", `取消未完成：${message}`);
+    } catch {
+      // EventJournal 轮询失败不阻断详情刷新；下一轮轮询会继续尝试。
+    }
+  }, [addToast, requirementId]);
 
   const reindexAndRefresh = useCallback(async () => {
     if (!requirementId || !selectedProjectId || document.visibilityState === "hidden") return;
@@ -489,10 +547,11 @@ export function RequirementDetailPage() {
       }
       await loadDetail();
       await reconcilePendingDispatches();
+      await reconcileCancelTracking();
     } finally {
       reindexRefreshInFlightRef.current = false;
     }
-  }, [loadDetail, reconcilePendingDispatches, requirementId, selectedProjectId]);
+  }, [loadDetail, reconcilePendingDispatches, reconcileCancelTracking, requirementId, selectedProjectId]);
 
   useEffect(() => {
     if (artifactModal !== "design") {
@@ -659,6 +718,15 @@ export function RequirementDetailPage() {
       });
   }, [selectedProjectId, subtaskReader]);
 
+  // 取消成功收敛：10s reindex 轮询见投影 status=cancelled 时给出成功反馈并收起执行中 banner。
+  useEffect(() => {
+    if (!cancelTracking || cancelTracking.phase === "failed") return;
+    if (requirement?.status === "cancelled") {
+      addToast("success", "需求已取消，级联清理已落地");
+      setCancelTracking(null);
+    }
+  }, [addToast, cancelTracking, requirement?.status]);
+
   useEffect(() => {
     void reindexAndRefresh();
     const intervalId = window.setInterval(() => {
@@ -748,10 +816,12 @@ export function RequirementDetailPage() {
   const handleDispatchLifecycleCommand = async (command: LifecycleCommand) => {
     if (!selectedProjectId || !requirementId || planningSubmittingStep) return;
     setPlanningSubmittingStep(command);
+    const trimmedCancelReason = command === "su-cancel" ? cancelReason.trim() : "";
     try {
       const result = await dispatchRequirementAnchorCommand(selectedProjectId, requirementId, {
         command,
-        payload: {}
+        // su-cancel 携带取消原因（trim 后非空才带 key），写入 dispatch payload 与 EventJournal 审计。
+        payload: command === "su-cancel" && trimmedCancelReason ? { reason: trimmedCancelReason } : {}
       });
       setPendingDispatches((items) => [
         ...items,
@@ -762,10 +832,14 @@ export function RequirementDetailPage() {
           subjectId: requirementId
         }
       ]);
+      if (command === "su-cancel") {
+        setCancelTracking({ jobId: result.jobId, phase: "queued", startedAt: new Date().toISOString() });
+      }
       addToast("success", `已排队 /ccb:${command}：${result.jobId}`);
       await loadDetail();
       await loadProjectData(selectedProjectId);
     } catch (error) {
+      // 409 等 dispatch 失败：toast 透出 server message（ConsoleApiError 已携带），不进入取消跟踪。
       addToast("error", error instanceof Error ? error.message : "发送 slot 指令失败");
       setPlanningSubmittingStep(null);
     }
@@ -774,6 +848,7 @@ export function RequirementDetailPage() {
   const handleLifecycleAction = (action: LifecycleAction) => {
     if (!requirement || planningSubmittingStep || lifecycleDisabledReason(action, requirement)) return;
     if (action.dangerous) {
+      if (action.command === "su-cancel") setCancelReason("");
       setConfirmLifecycleAction(action);
       return;
     }
@@ -969,7 +1044,7 @@ export function RequirementDetailPage() {
                         role="menuitem"
                         size="sm"
                         title={title}
-                        variant={action.command === "su-cancel" ? "danger" : "ghost"}
+                        variant="ghost"
                       >
                         <span aria-hidden="true" className={styles.lifecycleMenuIcon}>{action.icon}</span>
                         {active ? "派出中..." : action.label}
@@ -981,6 +1056,26 @@ export function RequirementDetailPage() {
             </div>
           </div>
         </div>
+        {cancelTracking ? (
+          <div
+            className={`${styles.banner} ${cancelTracking.phase === "failed" ? styles.bannerError : styles.bannerInfo}`}
+            data-testid="requirement-cancel-tracking-banner"
+            role="status"
+          >
+            {cancelTracking.phase === "queued" ? (
+              <>取消指令已排队（{cancelTracking.jobId}），等待 slot 接管…</>
+            ) : cancelTracking.phase === "executing" ? (
+              <>取消执行中（{cancelTracking.jobId}）——agent 正在写入 cancelled 并级联清理，投影确认后本提示自动收起。</>
+            ) : (
+              <span className={styles.bannerActionRow}>
+                <span>取消未完成：{cancelTracking.message ?? "未知原因"}。可重试取消或查看事件日志。</span>
+                <Button onClick={() => setCancelTracking(null)} size="sm" variant="ghost">
+                  知道了
+                </Button>
+              </span>
+            )}
+          </div>
+        ) : null}
         {terminal ? (
           <div className={`${styles.banner} ${styles.bannerWarning}`} role="status">
             该需求{terminalLabel(requirement.status)}，大状态恢复请使用独立指令。
@@ -1319,7 +1414,7 @@ export function RequirementDetailPage() {
                   setConfirmLifecycleAction(null);
                   void handleDispatchLifecycleCommand(action.command);
                 }}
-                variant="danger"
+                variant={confirmLifecycleAction.command === "su-cancel" ? "primary" : "danger"}
               >
                 {confirmLifecycleText.button}
               </Button>
@@ -1334,9 +1429,40 @@ export function RequirementDetailPage() {
         title={confirmLifecycleText?.title ?? "确认操作"}
       >
         {confirmLifecycleAction && confirmLifecycleText ? (
-          <p className={styles.confirmText}>
-            你将{confirmLifecycleText.verb}需求「{requirement.title}」，此动作通过 slot dispatch 派发到 Claude，是否继续？
-          </p>
+          confirmLifecycleAction.command === "su-cancel" ? (
+            <div className={styles.cancelConfirmBody}>
+              <p className={styles.confirmText}>
+                你将取消需求「{requirement.title}」。指令经 slot dispatch 派发到 Claude，落地后将级联执行：
+              </p>
+              <ul className={styles.cancelImpactList}>
+                <li>需求状态置为 cancelled（可经「复活」恢复状态，不恢复代码）</li>
+                <li>所有非终态子任务级联取消</li>
+                <li>删除拆分草案（breakdown draft）</li>
+                <li>不可逆舍弃需求 worktree，未合并代码将丢失</li>
+                <li>释放绑定 slot 并清理在途派工</li>
+              </ul>
+              {requirementSlot?.state === "busy" ? (
+                <p className={styles.cancelBusyHint} role="alert">
+                  当前绑定 slot 正忙：取消不抢占，将排队在当前任务之后生效。如需立即中断，请到 Slots 页执行
+                  cancel-current-job。
+                </p>
+              ) : null}
+              <label className={styles.slotReleaseField} htmlFor="requirement-cancel-reason">
+                取消原因
+                <Input
+                  aria-label="取消原因"
+                  id="requirement-cancel-reason"
+                  onChange={(event) => setCancelReason(event.target.value)}
+                  placeholder="建议填写，允许为空；将写入取消审计"
+                  value={cancelReason}
+                />
+              </label>
+            </div>
+          ) : (
+            <p className={styles.confirmText}>
+              你将{confirmLifecycleText.verb}需求「{requirement.title}」，此动作通过 slot dispatch 派发到 Claude，是否继续？
+            </p>
+          )
         ) : null}
       </Modal>
 
