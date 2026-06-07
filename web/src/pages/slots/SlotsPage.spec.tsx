@@ -392,7 +392,7 @@ describe("SlotsPage", () => {
         reason: "queue_not_empty",
         details: {
           slotId: "slot-3",
-          rows: [{ jobId: "job-9", status: "pending", command: "/ccb:su-cancel job_123" }]
+          queueRows: [{ jobId: "job-9", status: "pending", command: "/ccb:su-cancel job_123" }]
         }
       }
     });

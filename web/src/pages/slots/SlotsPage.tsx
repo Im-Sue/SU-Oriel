@@ -76,7 +76,9 @@ function describeResizeFailure(error: unknown, direction: SlotResizeDirection): 
     if (typeof payload.reason === "string") {
       const reasonLabel = RESIZE_REASON_LABEL[payload.reason] ?? payload.reason;
       const details = payload.details as Record<string, unknown> | undefined;
-      const rows = Array.isArray(details?.rows) ? (details?.rows as Array<Record<string, unknown>>) : [];
+      // server 端 inspectShrinkEligibility 透传 details.queueRows；保留 rows 兼容兜底
+      const rawRows = details?.queueRows ?? details?.rows;
+      const rows = Array.isArray(rawRows) ? (rawRows as Array<Record<string, unknown>>) : [];
       const hasCancelRow = rows.some(
         (row) => typeof row.command === "string" && row.command.includes("su-cancel")
       );
