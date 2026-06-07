@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createReadStream, type ReadStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { promisify } from "node:util";
 import type { Readable } from "node:stream";
@@ -70,6 +70,8 @@ export interface SlotTerminalStreamTmuxBackend {
   getPanePipe(input: SlotTerminalPaneStreamTarget): Promise<string>;
   stopPipe(input: SlotTerminalPaneStreamTarget): Promise<void>;
   startPipe(input: SlotTerminalPaneStreamTarget & { fifoPath: string }): Promise<void>;
+  setPipeOwner(input: SlotTerminalPaneStreamTarget & { fifoPath: string }): Promise<void>;
+  clearPipeOwner(input: SlotTerminalPaneStreamTarget): Promise<void>;
 }
 
 export interface SlotTerminalFifoSource {
@@ -111,9 +113,9 @@ export class TmuxSlotTerminalStreamBackend implements SlotTerminalStreamTmuxBack
       "-p",
       "-t",
       input.target,
-      "#{pane_pipe}"
+      "#{pane_pipe}\t#{@slot_terminal_pipe}"
     ]);
-    return String(stdout).trim();
+    return String(stdout).replace(/\r?\n$/, "");
   }
 
   async stopPipe(input: SlotTerminalPaneStreamTarget): Promise<void> {
@@ -133,6 +135,29 @@ export class TmuxSlotTerminalStreamBackend implements SlotTerminalStreamTmuxBack
       "-t",
       input.target,
       `cat > ${shellQuote(input.fifoPath)}`
+    ]);
+  }
+
+  async setPipeOwner(input: SlotTerminalPaneStreamTarget & { fifoPath: string }): Promise<void> {
+    await this.execFileProcess(this.tmuxCommand, [
+      ...socketArgs(input.socketPath),
+      "set-option",
+      "-p",
+      "-t",
+      input.target,
+      "@slot_terminal_pipe",
+      input.fifoPath
+    ]);
+  }
+
+  async clearPipeOwner(input: SlotTerminalPaneStreamTarget): Promise<void> {
+    await this.execFileProcess(this.tmuxCommand, [
+      ...socketArgs(input.socketPath),
+      "set-option",
+      "-pu",
+      "-t",
+      input.target,
+      "@slot_terminal_pipe"
     ]);
   }
 }
@@ -324,6 +349,7 @@ class SlotTerminalStreamRecorder {
   private degradedReason: SlotTerminalStreamDegradedReason | undefined;
   private startPromise: Promise<void> | null = null;
   private fifoSource: SlotTerminalFifoSource | null = null;
+  private ownsPipe = false;
   private idleTimer: NodeJS.Timeout | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
 
@@ -460,16 +486,24 @@ class SlotTerminalStreamRecorder {
     this.degradedReason = undefined;
     await this.closePipeResources({ stopTmuxPipe: false });
     try {
-      const panePipe = await this.tmux.getPanePipe(this.targetInput());
-      if (panePipe && !isRecoverableSlotTerminalPipe(panePipe)) {
+      const panePipe = parsePanePipeState(await this.tmux.getPanePipe(this.targetInput()));
+      if (panePipe.active && !panePipe.ownerPipePath) {
         this.enterDegraded("pane-pipe-occupied");
         return;
       }
-      await this.tmux.stopPipe(this.targetInput());
+      if (panePipe.active) {
+        await this.tmux.stopPipe(this.targetInput());
+        await this.tmux.clearPipeOwner(this.targetInput());
+        await cleanupOwnedFifoDirectory(panePipe.ownerPipePath);
+      } else if (panePipe.ownerPipePath) {
+        await this.tmux.clearPipeOwner(this.targetInput()).catch(() => undefined);
+      }
       const source = await this.fifo.open();
       this.fifoSource = source;
       this.attachSource(source.stream);
       await this.tmux.startPipe({ ...this.targetInput(), fifoPath: source.path });
+      this.ownsPipe = true;
+      await this.tmux.setPipeOwner({ ...this.targetInput(), fifoPath: source.path });
       this.state = "streaming";
       this.emitMode({ mode: "stream" });
     } catch (error) {
@@ -609,6 +643,11 @@ class SlotTerminalStreamRecorder {
   private async closePipeResources(options: { stopTmuxPipe: boolean }): Promise<void> {
     const source = this.fifoSource;
     this.fifoSource = null;
+    if (options.stopTmuxPipe && this.ownsPipe) {
+      await this.tmux.stopPipe(this.targetInput()).catch(() => undefined);
+      await this.tmux.clearPipeOwner(this.targetInput()).catch(() => undefined);
+      this.ownsPipe = false;
+    }
     if (source) {
       source.stream.removeAllListeners("data");
       source.stream.removeAllListeners("error");
@@ -616,9 +655,6 @@ class SlotTerminalStreamRecorder {
       source.stream.removeAllListeners("end");
       await source.close().catch(() => undefined);
       this.decoder.end();
-    }
-    if (options.stopTmuxPipe) {
-      await this.tmux.stopPipe(this.targetInput()).catch(() => undefined);
     }
   }
 
@@ -683,8 +719,20 @@ function normalizePositiveInteger(value: number | undefined, fallback: number): 
   return Math.floor(value);
 }
 
-function isRecoverableSlotTerminalPipe(panePipe: string): boolean {
-  return panePipe.includes(SLOT_TERMINAL_STREAM_FIFO_PREFIX);
+function parsePanePipeState(raw: string): { active: boolean; ownerPipePath: string } {
+  const [panePipe = "", ownerPipePath = ""] = raw.split("\t");
+  return {
+    active: panePipe.trim() === "1",
+    ownerPipePath: ownerPipePath.trim()
+  };
+}
+
+async function cleanupOwnedFifoDirectory(fifoPath: string): Promise<void> {
+  const directory = dirname(fifoPath);
+  if (!directory.includes(SLOT_TERMINAL_STREAM_FIFO_PREFIX)) {
+    return;
+  }
+  await rm(directory, { recursive: true, force: true }).catch(() => undefined);
 }
 
 function isFifoError(error: unknown): boolean {

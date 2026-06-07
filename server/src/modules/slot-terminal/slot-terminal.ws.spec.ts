@@ -1687,8 +1687,8 @@ describe("slot-terminal websocket", () => {
 
   it("tmux slot-terminal backends only use the allowed tmux command whitelist on the real socket path", async () => {
     const execFileProcess = vi.fn(async (_command: string, args: string[]) => {
-      if (args.includes("#{pane_pipe}")) {
-        return { stdout: "", stderr: "" };
+      if (args.includes("#{pane_pipe}\t#{@slot_terminal_pipe}")) {
+        return { stdout: "0\t\n", stderr: "" };
       }
       if (args.includes("display-message")) {
         return { stdout: "100 30\n", stderr: "" };
@@ -1720,11 +1720,13 @@ describe("slot-terminal websocket", () => {
     const panePipe = await streamBackend.getPanePipe({ target: "%7", socketPath });
     await streamBackend.stopPipe({ target: "%7", socketPath });
     await streamBackend.startPipe({ target: "%7", socketPath, fifoPath: "/tmp/slot fifo" });
+    await streamBackend.setPipeOwner({ target: "%7", socketPath, fifoPath: "/tmp/slot fifo" });
+    await streamBackend.clearPipeOwner({ target: "%7", socketPath });
 
     expect(initialFrame).toBe("frame\n");
     expect(frame).toBe("frame\n");
     expect(dimensions).toEqual({ cols: 100, rows: 30 });
-    expect(panePipe).toBe("");
+    expect(panePipe).toBe("0\t");
     expect(execFileProcess.mock.calls.map((call) => call[1])).toEqual([
       [
         "-S",
@@ -1762,7 +1764,7 @@ describe("slot-terminal websocket", () => {
         "-p",
         "-t",
         "%7",
-        "#{pane_pipe}"
+        "#{pane_pipe}\t#{@slot_terminal_pipe}"
       ],
       [
         "-S",
@@ -1779,12 +1781,32 @@ describe("slot-terminal websocket", () => {
         "-t",
         "%7",
         "cat > '/tmp/slot fifo'"
+      ],
+      [
+        "-S",
+        socketPath,
+        "set-option",
+        "-p",
+        "-t",
+        "%7",
+        "@slot_terminal_pipe",
+        "/tmp/slot fifo"
+      ],
+      [
+        "-S",
+        socketPath,
+        "set-option",
+        "-pu",
+        "-t",
+        "%7",
+        "@slot_terminal_pipe"
       ]
     ]);
     const invokedArgs = execFileProcess.mock.calls.flatMap(([, args]) => args);
     expect(invokedArgs).toContain("capture-pane");
     expect(invokedArgs).toContain("display-message");
     expect(invokedArgs).toContain("pipe-pane");
+    expect(invokedArgs).toContain("set-option");
     expect(invokedArgs).not.toContain("resize-window");
     expect(invokedArgs).not.toContain("refresh-client");
     expect(invokedArgs).not.toContain("-C");

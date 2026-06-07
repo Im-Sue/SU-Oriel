@@ -65,7 +65,7 @@ class FakeFifoBackend implements SlotTerminalFifoBackend {
 }
 
 class FakeTmuxBackend implements SlotTerminalStreamTmuxBackend {
-  panePipes: string[] = [""];
+  panePipes: string[] = ["0\t"];
 
   constructor(readonly calls: string[]) {}
 
@@ -81,6 +81,14 @@ class FakeTmuxBackend implements SlotTerminalStreamTmuxBackend {
   async startPipe(input: SlotTerminalPaneStreamTarget & { fifoPath: string }): Promise<void> {
     this.calls.push(`tmux:start:${input.socketPath ?? ""}:${input.target}:${input.fifoPath}`);
   }
+
+  async setPipeOwner(input: SlotTerminalPaneStreamTarget & { fifoPath: string }): Promise<void> {
+    this.calls.push(`tmux:set-owner:${input.socketPath ?? ""}:${input.target}:${input.fifoPath}`);
+  }
+
+  async clearPipeOwner(input: SlotTerminalPaneStreamTarget): Promise<void> {
+    this.calls.push(`tmux:clear-owner:${input.socketPath ?? ""}:${input.target}`);
+  }
 }
 
 afterEach(() => {
@@ -88,13 +96,17 @@ afterEach(() => {
 });
 
 describe("slot-terminal stream recorder tmux backend", () => {
-  it("uses display-message pane_pipe and pipe-pane commands against the slot tmux socket", async () => {
-    const execFile = vi.fn(async () => ({ stdout: "cat > /tmp/existing\n", stderr: "" }));
+  it("uses pane pipe owner metadata and pipe-pane commands against the slot tmux socket", async () => {
+    const execFile = vi.fn(async () => ({ stdout: "1\t/tmp/slot-owner\n", stderr: "" }));
     const backend = new TmuxSlotTerminalStreamBackend({ execFileProcess: execFile });
 
-    await expect(backend.getPanePipe({ target: "%7", socketPath: "/tmp/tmux.sock" })).resolves.toBe("cat > /tmp/existing");
+    await expect(backend.getPanePipe({ target: "%7", socketPath: "/tmp/tmux.sock" })).resolves.toBe(
+      "1\t/tmp/slot-owner"
+    );
     await backend.stopPipe({ target: "%7", socketPath: "/tmp/tmux.sock" });
     await backend.startPipe({ target: "%7", socketPath: "/tmp/tmux.sock", fifoPath: "/tmp/pipe path/pipe" });
+    await backend.setPipeOwner({ target: "%7", socketPath: "/tmp/tmux.sock", fifoPath: "/tmp/pipe path/pipe" });
+    await backend.clearPipeOwner({ target: "%7", socketPath: "/tmp/tmux.sock" });
 
     expect(execFile).toHaveBeenNthCalledWith(1, "tmux", [
       "-S",
@@ -103,7 +115,7 @@ describe("slot-terminal stream recorder tmux backend", () => {
       "-p",
       "-t",
       "%7",
-      "#{pane_pipe}"
+      "#{pane_pipe}\t#{@slot_terminal_pipe}"
     ]);
     expect(execFile).toHaveBeenNthCalledWith(2, "tmux", [
       "-S",
@@ -120,6 +132,25 @@ describe("slot-terminal stream recorder tmux backend", () => {
       "-t",
       "%7",
       "cat > '/tmp/pipe path/pipe'"
+    ]);
+    expect(execFile).toHaveBeenNthCalledWith(4, "tmux", [
+      "-S",
+      "/tmp/tmux.sock",
+      "set-option",
+      "-p",
+      "-t",
+      "%7",
+      "@slot_terminal_pipe",
+      "/tmp/pipe path/pipe"
+    ]);
+    expect(execFile).toHaveBeenNthCalledWith(5, "tmux", [
+      "-S",
+      "/tmp/tmux.sock",
+      "set-option",
+      "-pu",
+      "-t",
+      "%7",
+      "@slot_terminal_pipe"
     ]);
   });
 });
@@ -161,9 +192,9 @@ describe("slot-terminal stream recorder registry", () => {
     });
     expect(calls).toEqual([
       "tmux:get:/tmp/tmux.sock:%7",
-      "tmux:stop:/tmp/tmux.sock:%7",
       "fifo:open",
-      `tmux:start:/tmp/tmux.sock:%7:${fifo.sources[0].path}`
+      `tmux:start:/tmp/tmux.sock:%7:${fifo.sources[0].path}`,
+      `tmux:set-owner:/tmp/tmux.sock:%7:${fifo.sources[0].path}`
     ]);
 
     await first.release();
@@ -174,7 +205,7 @@ describe("slot-terminal stream recorder registry", () => {
     await vi.advanceTimersByTimeAsync(100);
 
     expect(fifo.sources[0].closed).toBe(true);
-    expect(calls.at(-1)).toBe("tmux:stop:/tmp/tmux.sock:%7");
+    expect(calls.slice(-2)).toEqual(["tmux:stop:/tmp/tmux.sock:%7", "tmux:clear-owner:/tmp/tmux.sock:%7"]);
     expect(registry.getDebugState({ target: "%7", socketPath: "/tmp/tmux.sock" })).toBeNull();
   });
 
@@ -182,7 +213,7 @@ describe("slot-terminal stream recorder registry", () => {
     vi.useFakeTimers();
     const calls: string[] = [];
     const tmux = new FakeTmuxBackend(calls);
-    tmux.panePipes = ["cat > /tmp/anchor-recording", ""];
+    tmux.panePipes = ["1\t", "0\t"];
     const fifo = new FakeFifoBackend(calls);
     const modes: SlotTerminalStreamModeEvent[] = [];
     const registry = new SlotTerminalStreamRecorderRegistry({
@@ -211,9 +242,62 @@ describe("slot-terminal stream recorder registry", () => {
     expect(calls).toEqual([
       "tmux:get::%7",
       "tmux:get::%7",
-      "tmux:stop::%7",
       "fifo:open",
-      `tmux:start::%7:${fifo.sources[0].path}`
+      `tmux:start::%7:${fifo.sources[0].path}`,
+      `tmux:set-owner::%7:${fifo.sources[0].path}`
+    ]);
+    await subscription.release();
+    await registry.closeAll();
+  });
+
+  it("does not stop or clear an externally occupied pane pipe when closing degraded subscriptions", async () => {
+    const calls: string[] = [];
+    const tmux = new FakeTmuxBackend(calls);
+    tmux.panePipes = ["1\t"];
+    const fifo = new FakeFifoBackend(calls);
+    const registry = new SlotTerminalStreamRecorderRegistry({ tmux, fifo });
+    const subscription = await registry.subscribe({ target: "%7" });
+
+    expect(calls).toEqual(["tmux:get::%7"]);
+    await subscription.release();
+    await registry.closeAll();
+    expect(calls).toEqual(["tmux:get::%7"]);
+  });
+
+  it("recovers an owned stale pane pipe before reopening during restart recovery", async () => {
+    const calls: string[] = [];
+    const tmux = new FakeTmuxBackend(calls);
+    tmux.panePipes = ["1\t/tmp/su-oriel-slot-terminal-stream-old/pipe"];
+    const fifo = new FakeFifoBackend(calls);
+    const registry = new SlotTerminalStreamRecorderRegistry({ tmux, fifo });
+    const subscription = await registry.subscribe({ target: "%7", socketPath: "/tmp/tmux.sock" });
+
+    expect(calls).toEqual([
+      "tmux:get:/tmp/tmux.sock:%7",
+      "tmux:stop:/tmp/tmux.sock:%7",
+      "tmux:clear-owner:/tmp/tmux.sock:%7",
+      "fifo:open",
+      `tmux:start:/tmp/tmux.sock:%7:${fifo.sources[0].path}`,
+      `tmux:set-owner:/tmp/tmux.sock:%7:${fifo.sources[0].path}`
+    ]);
+    await subscription.release();
+    await registry.closeAll();
+  });
+
+  it("clears a stale owner marker on an idle pane before opening", async () => {
+    const calls: string[] = [];
+    const tmux = new FakeTmuxBackend(calls);
+    tmux.panePipes = ["0\t/tmp/su-oriel-slot-terminal-stream-old/pipe"];
+    const fifo = new FakeFifoBackend(calls);
+    const registry = new SlotTerminalStreamRecorderRegistry({ tmux, fifo });
+    const subscription = await registry.subscribe({ target: "%7" });
+
+    expect(calls).toEqual([
+      "tmux:get::%7",
+      "tmux:clear-owner::%7",
+      "fifo:open",
+      `tmux:start::%7:${fifo.sources[0].path}`,
+      `tmux:set-owner::%7:${fifo.sources[0].path}`
     ]);
     await subscription.release();
     await registry.closeAll();
@@ -293,29 +377,11 @@ describe("slot-terminal stream recorder registry", () => {
     await registry.closeAll();
   });
 
-  it("clears a stale slot-terminal pipe before reopening during restart recovery", async () => {
-    const calls: string[] = [];
-    const tmux = new FakeTmuxBackend(calls);
-    tmux.panePipes = [`cat > '/tmp/${SLOT_TERMINAL_STREAM_FIFO_PREFIX}old/pipe'`];
-    const fifo = new FakeFifoBackend(calls);
-    const registry = new SlotTerminalStreamRecorderRegistry({ tmux, fifo });
-    const subscription = await registry.subscribe({ target: "%7", socketPath: "/tmp/tmux.sock" });
-
-    expect(calls).toEqual([
-      "tmux:get:/tmp/tmux.sock:%7",
-      "tmux:stop:/tmp/tmux.sock:%7",
-      "fifo:open",
-      `tmux:start:/tmp/tmux.sock:%7:${fifo.sources[0].path}`
-    ]);
-    await subscription.release();
-    await registry.closeAll();
-  });
-
   it("emits errors, downgrades, and retries after FIFO setup or read failures", async () => {
     vi.useFakeTimers();
     const calls: string[] = [];
     const tmux = new FakeTmuxBackend(calls);
-    tmux.panePipes = ["", ""];
+    tmux.panePipes = ["0\t", "0\t"];
     const fifo = new FakeFifoBackend(calls);
     fifo.failNextOpen = new SlotTerminalFifoError("mkfifo failed");
     const modes: SlotTerminalStreamModeEvent[] = [];
