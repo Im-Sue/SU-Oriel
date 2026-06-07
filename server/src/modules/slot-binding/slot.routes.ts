@@ -4,6 +4,17 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { prisma } from "../../db/prisma.js";
 import { AnchorDispatchQueuePolicyError } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
+import {
+  defaultManagedConfigMutationLock,
+  type ManagedConfigMutationLock
+} from "../project-ccbd/managed-config-mutation-lock.js";
+import {
+  DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS,
+  isSlotResizeLockTimeoutError,
+  slotResizeLockTimeoutBody,
+  waitForSlotResizeLock
+} from "../slot-resize/resize-lock.js";
+import { SlotResizeService } from "../slot-resize/slot-resize.service.js";
 import { JobSlotRouter } from "./job-slot-router.js";
 import { SlotBindingService, isSlotId, type SlotId } from "./slot-binding.service.js";
 import { slotIds as deriveSlotIds } from "../slot-topology/slot-topology.service.js";
@@ -61,6 +72,9 @@ export interface SlotRouteDependencies {
   prismaClient?: PrismaClient;
   slotRuntime?: SlotRuntime;
   slotContextResetter?: SlotContextResetter | null;
+  slotResizeService?: Pick<SlotResizeService, "grow" | "shrink" | "getShrinkEligibility">;
+  resizeLock?: ManagedConfigMutationLock;
+  resizeLockWaitTimeoutMs?: number;
 }
 
 export async function registerSlotRoutes(
@@ -69,6 +83,12 @@ export async function registerSlotRoutes(
 ): Promise<void> {
   const db = dependencies.prismaClient ?? prisma;
   const slotRuntime = dependencies.slotRuntime ?? createDefaultSlotRuntime();
+  const resizeLock = dependencies.resizeLock ?? defaultManagedConfigMutationLock;
+  const resizeLockWaitTimeoutMs = dependencies.resizeLockWaitTimeoutMs ?? DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS;
+  const slotResizeService = dependencies.slotResizeService ?? new SlotResizeService({
+    client: db,
+    lock: resizeLock
+  });
   const slotContextResetter =
     dependencies.slotContextResetter === undefined
       ? process.env.NODE_ENV === "test"
@@ -103,11 +123,16 @@ export async function registerSlotRoutes(
       await syncSlotTips(projectId, { client: db, logger: app.log });
     }
   });
-  router = new JobSlotRouter({ prismaClient: db, slotBinding });
+  router = new JobSlotRouter({
+    prismaClient: db,
+    slotBinding,
+    resizeLock,
+    resizeLockWaitTimeoutMs
+  });
 
   app.get("/api/projects/:projectId/slots", async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
-    return await buildSlotProjection(db, projectId, reply);
+    return await buildSlotProjection(db, projectId, reply, {}, slotResizeService);
   });
 
   app.get("/api/slots", async (request, reply) => {
@@ -117,7 +142,37 @@ export async function registerSlotRoutes(
       reply.status(400);
       return { message: "projectId is required for SlotBinding projection" };
     }
-    return await buildSlotProjection(db, projectId, reply);
+    return await buildSlotProjection(db, projectId, reply, {}, slotResizeService);
+  });
+
+  app.post("/api/projects/:projectId/slots/resize", async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    const body = (request.body ?? {}) as { direction?: string };
+    if (body.direction !== "grow" && body.direction !== "shrink") {
+      reply.status(400);
+      return {
+        message: "direction must be grow or shrink"
+      };
+    }
+
+    const result = body.direction === "grow"
+      ? await slotResizeService.grow(projectId)
+      : await slotResizeService.shrink(projectId);
+    if (!result.ok) {
+      reply.status(result.reason === "project_missing" ? 404 : 409);
+      return result;
+    }
+
+    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false }, slotResizeService);
+    if ("slots" in projection) {
+      return {
+        ...projection,
+        resize: result
+      };
+    }
+    return {
+      resize: result
+    };
   });
 
   app.post("/api/projects/:projectId/requirements/:requirementId/bind-slot", async (request, reply) => {
@@ -134,11 +189,24 @@ export async function registerSlotRoutes(
       return { message: "requirement 不存在" };
     }
 
-    const binding = await slotBinding.bindRequirement({
-      projectId,
-      requirementId,
-      reason: "manual_rebind"
-    });
+    let binding;
+    try {
+      await waitForSlotResizeLock(projectId, {
+        lock: resizeLock,
+        timeoutMs: resizeLockWaitTimeoutMs
+      });
+      binding = await slotBinding.bindRequirement({
+        projectId,
+        requirementId,
+        reason: "manual_rebind"
+      });
+    } catch (error) {
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
+      }
+      throw error;
+    }
     if (!binding) {
       reply.status(409);
       return {
@@ -147,7 +215,7 @@ export async function registerSlotRoutes(
       };
     }
 
-    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false });
+    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false }, slotResizeService);
     if ("slots" in projection) {
       return {
         ...projection,
@@ -216,7 +284,7 @@ export async function registerSlotRoutes(
       releasedBy: "user",
       operatorReason: reason === "force_release" ? forceReason : null
     });
-    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false });
+    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false }, slotResizeService);
     return {
       ...projection,
       slot: projectSlot(released, null, [], null)
@@ -268,7 +336,7 @@ export async function registerSlotRoutes(
         }
       }
     });
-    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false });
+    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false }, slotResizeService);
     return {
       ...projection,
       slot: projectSlot(renewed, renewed.requirement, [], null)
@@ -328,6 +396,10 @@ export async function registerSlotRoutes(
           code: error.code,
           message: error.message
         };
+      }
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
       }
       throw error;
     }
@@ -397,7 +469,7 @@ export async function registerSlotRoutes(
       }
     });
     const slot = await slotBinding.markBound(projectId, slotId);
-    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false });
+    const projection = await buildSlotProjection(db, projectId, reply, { statusIfMissing: false }, slotResizeService);
     return {
       ...projection,
       slot: projectSlot(slot, null, [], null),
@@ -411,7 +483,8 @@ async function buildSlotProjection(
   db: PrismaClient,
   projectId: string,
   reply: FastifyReply,
-  options: { statusIfMissing?: boolean } = {}
+  options: { statusIfMissing?: boolean } = {},
+  slotResizeService?: Pick<SlotResizeService, "getShrinkEligibility">
 ) {
   const project = await db.project.findUnique({
     where: { id: projectId },
@@ -423,7 +496,7 @@ async function buildSlotProjection(
   }
   const businessSlotIds = deriveSlotIds(project.slotCount);
 
-  const [bindings, queueRows, degradedRows] = await Promise.all([
+  const [bindings, queueRows, degradedRows, shrinkEligibility] = await Promise.all([
     db.slotBinding.findMany({
       where: { projectId },
       include: {
@@ -453,7 +526,8 @@ async function buildSlotProjection(
         }
       },
       orderBy: { emittedAt: "desc" }
-    })
+    }),
+    slotResizeService?.getShrinkEligibility(projectId) ?? Promise.resolve(null)
   ]);
   const queue = await projectQueueRows(db, projectId, queueRows);
   const queueBySlot = new Map<string, QueueProjection[]>();
@@ -467,8 +541,10 @@ async function buildSlotProjection(
   return {
     project: {
       id: project.id,
-      name: project.name
+      name: project.name,
+      slotCount: project.slotCount
     },
+    slotCount: project.slotCount,
     main: {
       slotId: "main",
       lane: "coordination",
@@ -481,6 +557,7 @@ async function buildSlotProjection(
         ? projectSlot(binding, binding.requirement, queueBySlot.get(slotId) ?? [], degradedBySlot.get(slotId) ?? null)
         : idleSlot(slotId, queueBySlot.get(slotId) ?? []);
     }),
+    shrinkEligibility,
     queue: queue.filter((item) => item.slotId === null),
     ...(options.statusIfMissing === false ? {} : { generatedAt: new Date().toISOString() })
   };

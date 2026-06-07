@@ -5,8 +5,18 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../../db/prisma.js";
 import { assertLocalRequest } from "../ai-cli/ai-cli.guard.js";
+import {
+  defaultManagedConfigMutationLock,
+  type ManagedConfigMutationLock
+} from "../project-ccbd/managed-config-mutation-lock.js";
 import { JobSlotRouter } from "../slot-binding/job-slot-router.js";
 import { SlotBindingService } from "../slot-binding/slot-binding.service.js";
+import {
+  DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS,
+  isSlotResizeLockTimeoutError,
+  slotResizeLockTimeoutBody,
+  waitForSlotResizeLock
+} from "../slot-resize/resize-lock.js";
 import { AnchorDispatchQueuePolicyError } from "./anchor-dispatch-queue-policy.js";
 import { MultiAnchorBrokerService } from "./broker.service.js";
 import { NativeAnchorTerminalService } from "../anchor-terminal/native-terminal.service.js";
@@ -111,6 +121,8 @@ export interface AnchorRouteDependencies {
   nativeTerminal?: NativeAnchorTerminalLike;
   jobSlotRouter?: JobSlotRouterLike;
   slotBinding?: SlotBindingLike;
+  resizeLock?: ManagedConfigMutationLock;
+  resizeLockWaitTimeoutMs?: number;
 }
 
 export async function registerAnchorRoutes(
@@ -120,10 +132,14 @@ export async function registerAnchorRoutes(
   const db = dependencies.prismaClient ?? prisma;
   const broker = dependencies.broker ?? new MultiAnchorBrokerService(db);
   const nativeTerminal = dependencies.nativeTerminal ?? new NativeAnchorTerminalService();
+  const resizeLock = dependencies.resizeLock ?? defaultManagedConfigMutationLock;
+  const resizeLockWaitTimeoutMs = dependencies.resizeLockWaitTimeoutMs ?? DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS;
   const slotBinding = dependencies.slotBinding ?? new SlotBindingService(db);
   const jobSlotRouter = dependencies.jobSlotRouter ?? new JobSlotRouter({
     prismaClient: db,
-    slotBinding: slotBinding instanceof SlotBindingService ? slotBinding : new SlotBindingService(db)
+    slotBinding: slotBinding instanceof SlotBindingService ? slotBinding : new SlotBindingService(db),
+    resizeLock,
+    resizeLockWaitTimeoutMs
   });
 
   async function listCompatAnchors(): Promise<Record<string, unknown>[]> {
@@ -359,10 +375,23 @@ export async function registerAnchorRoutes(
       return { code: "requirement_status_locked", message: "需求当前状态不允许启动 planning anchor" };
     }
 
-    const binding = await slotBinding.bindRequirement({
-      projectId: requirement.project.id,
-      requirementId: requirement.id
-    });
+    let binding;
+    try {
+      await waitForSlotResizeLock(requirement.project.id, {
+        lock: resizeLock,
+        timeoutMs: resizeLockWaitTimeoutMs
+      });
+      binding = await slotBinding.bindRequirement({
+        projectId: requirement.project.id,
+        requirementId: requirement.id
+      });
+    } catch (error) {
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
+      }
+      throw error;
+    }
     if (!binding) {
       reply.status(409);
       return { code: "slot_pool_unavailable", message: "slot 已满，无法绑定 planning slot" };
@@ -796,6 +825,10 @@ async function enqueueOrReplyPolicyError<T>(
     if (error instanceof AnchorDispatchQueuePolicyError) {
       reply.status(error.statusCode);
       return { ok: false, body: anchorDispatchPolicyErrorBody(error) };
+    }
+    if (isSlotResizeLockTimeoutError(error)) {
+      reply.status(error.statusCode);
+      return { ok: false, body: slotResizeLockTimeoutBody(error) };
     }
     throw error;
   }

@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { beforeEach, test, vi } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 
 import { buildApp } from "../../app.js";
 import { prisma } from "../../db/prisma.js";
+import { renderManagedCcbConfig, projectSlotTopology } from "../project-ccbd/managed-config.service.js";
+import { ManagedConfigMutationLock } from "../project-ccbd/managed-config-mutation-lock.js";
+import type { CcbReloadResult } from "../slot-resize/reload-cli.js";
+import { SlotResizeService, type SlotResizeRuntime } from "../slot-resize/slot-resize.service.js";
 import type { SlotContextResetter } from "./slot-context-reset.service.js";
+
+const tmpRoots: string[] = [];
 
 async function resetDatabase(): Promise<void> {
   await prisma.anchorDispatchQueue.deleteMany();
@@ -32,6 +38,92 @@ async function createProject(slotCount = 3) {
 beforeEach(async () => {
   await resetDatabase();
 });
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(tmpRoots.map((root) => rm(root, { recursive: true, force: true })));
+  tmpRoots.length = 0;
+});
+
+async function createResizeProject(slotCount = 3) {
+  const root = await mkdtemp(join(tmpdir(), "slot-route-resize-"));
+  tmpRoots.push(root);
+  const project = await prisma.project.create({
+    data: {
+      name: `slot-route-resize-${randomUUID()}`,
+      localPath: root,
+      slotCount
+    }
+  });
+  await mkdir(join(root, ".ccb"), { recursive: true });
+  await writeFile(
+    join(root, ".ccb", "ccb.config"),
+    renderManagedCcbConfig({
+      projectId: project.id,
+      projectRoot: root,
+      topology: projectSlotTopology(slotCount)
+    }).configText,
+    "utf8"
+  );
+  return project;
+}
+
+function publishedReload(): CcbReloadResult {
+  return {
+    ok: true,
+    status: "published",
+    dryRun: false,
+    mutationEnabled: true,
+    planClass: "add_window",
+    safeToApply: true,
+    futureSafeToApply: true,
+    operations: [],
+    blocked: [],
+    reasons: [],
+    diagnostics: [],
+    rawStdout: "reload_status: published\n",
+    rawStderr: "",
+    exitCode: 0,
+    errorMessage: null
+  };
+}
+
+function mockRuntime(overrides: Partial<SlotResizeRuntime> = {}): SlotResizeRuntime {
+  return {
+    isOnline: async () => true,
+    waitForSlotActive: async () => true,
+    hasActiveSlotJob: async () => false,
+    ...overrides
+  };
+}
+
+function resizeService(options: {
+  runtime?: SlotResizeRuntime;
+  lock?: ManagedConfigMutationLock;
+  reload?: () => Promise<CcbReloadResult>;
+} = {}): SlotResizeService {
+  return new SlotResizeService({
+    client: prisma,
+    lock: options.lock ?? new ManagedConfigMutationLock(),
+    runtime: options.runtime ?? mockRuntime(),
+    reload: async () => options.reload ? await options.reload() : publishedReload(),
+    contextResetterFactory: () => ({
+      resetSlotContext: async (input) => ({
+        projectId: input.projectId,
+        slotId: input.slotId,
+        trigger: input.trigger,
+        command: input.command ?? "/new",
+        agentNames: [],
+        results: [],
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        status: "ok"
+      })
+    }),
+    activeWaitTimeoutMs: 10
+  });
+}
 
 test("GET /api/projects/:projectId/slots projects main lane, three slots, queue, stale, and unhealthy badges", async () => {
   const project = await createProject();
@@ -123,6 +215,7 @@ test("GET /api/projects/:projectId/slots projects main lane, three slots, queue,
 
     assert.equal(response.statusCode, 200, response.body);
     const body = response.json() as {
+      slotCount: number;
       main: { slotId: string; lane: string; canBindBusiness: boolean };
       slots: Array<{
         slotId: string;
@@ -132,8 +225,14 @@ test("GET /api/projects/:projectId/slots projects main lane, three slots, queue,
         stale: { detectedAt: string; notifiedCount: number } | null;
         unhealthy: { degradedReason: string | null; severity: string | null } | null;
       }>;
+      shrinkEligibility: {
+        tailSlotId: string | null;
+        eligible: boolean;
+        checks: { slotBindingIdle: boolean; queueClear: boolean; runtimeIdle: boolean };
+      };
       queue: Array<{ jobId: string; requirementId: string | null; requirementTitle: string | null }>;
     };
+    assert.equal(body.slotCount, 3);
     assert.deepEqual(body.main, {
       slotId: "main",
       lane: "coordination",
@@ -159,6 +258,13 @@ test("GET /api/projects/:projectId/slots projects main lane, three slots, queue,
     assert.equal(body.queue[0].jobId, "job-slot-route-queued");
     assert.equal(body.queue[0].requirementId, queuedRequirement.id);
     assert.equal(body.queue[0].requirementTitle, queuedRequirement.title);
+    assert.equal(body.shrinkEligibility.tailSlotId, "slot-3");
+    assert.equal(body.shrinkEligibility.eligible, true);
+    assert.deepEqual(body.shrinkEligibility.checks, {
+      slotBindingIdle: true,
+      queueClear: true,
+      runtimeIdle: true
+    });
   } finally {
     await app.close();
   }
@@ -224,6 +330,199 @@ test("GET /api/projects/:projectId/slots projects four lanes from project slotCo
       severity: "error",
       emittedAt: "2026-05-21T04:00:00.000Z"
     });
+  } finally {
+    await app.close();
+  }
+});
+
+test("GET /api/projects/:projectId/slots reports tail shrink eligibility and blocks su-cancel queue rows", async () => {
+  const project = await createResizeProject(4);
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Cancel queued requirement",
+      description: "resize projection fixture",
+      status: "planning"
+    }
+  });
+  await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job-slot-route-resize-cancel",
+      anchorId: "slot-4",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: "/ccb:su-cancel job_123",
+      status: "pending"
+    }
+  });
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      slotResizeService: resizeService()
+    }
+  });
+
+  try {
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}/slots`
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    const body = response.json() as {
+      slotCount: number;
+      shrinkEligibility: {
+        tailSlotId: string;
+        eligible: boolean;
+        checks: { slotBindingIdle: boolean; queueClear: boolean; runtimeIdle: boolean };
+        reasons: string[];
+        details: { queueRows?: Array<{ command: string; status: string }> };
+      };
+    };
+    assert.equal(body.slotCount, 4);
+    assert.equal(body.shrinkEligibility.tailSlotId, "slot-4");
+    assert.equal(body.shrinkEligibility.eligible, false);
+    assert.deepEqual(body.shrinkEligibility.checks, {
+      slotBindingIdle: true,
+      queueClear: false,
+      runtimeIdle: true
+    });
+    assert.deepEqual(body.shrinkEligibility.reasons, ["queue_not_empty"]);
+    assert.equal(body.shrinkEligibility.details.queueRows?.[0]?.command, "/ccb:su-cancel job_123");
+  } finally {
+    await app.close();
+  }
+});
+
+test("POST /api/projects/:projectId/slots/resize grows and shrinks topology through SlotResizeService", async () => {
+  const project = await createResizeProject(3);
+  const service = resizeService();
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      slotResizeService: service
+    }
+  });
+
+  try {
+    const grown = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/slots/resize`,
+      payload: { direction: "grow" }
+    });
+    assert.equal(grown.statusCode, 200, grown.body);
+    const grownBody = grown.json() as {
+      slotCount: number;
+      resize: { ok: true; direction: string; mode: string; previousSlotCount: number; nextSlotCount: number };
+      slots: Array<{ slotId: string }>;
+    };
+    assert.equal(grownBody.slotCount, 4);
+    assert.deepEqual(grownBody.slots.map((slot) => slot.slotId), ["slot-1", "slot-2", "slot-3", "slot-4"]);
+    assert.equal(grownBody.resize.ok, true);
+    assert.equal(grownBody.resize.direction, "grow");
+    assert.equal(grownBody.resize.mode, "reloaded");
+    assert.equal(grownBody.resize.previousSlotCount, 3);
+    assert.equal(grownBody.resize.nextSlotCount, 4);
+
+    const shrunk = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/slots/resize`,
+      payload: { direction: "shrink" }
+    });
+    assert.equal(shrunk.statusCode, 200, shrunk.body);
+    const shrunkBody = shrunk.json() as {
+      slotCount: number;
+      resize: { ok: true; direction: string; previousSlotCount: number; nextSlotCount: number };
+      slots: Array<{ slotId: string }>;
+    };
+    assert.equal(shrunkBody.slotCount, 3);
+    assert.deepEqual(shrunkBody.slots.map((slot) => slot.slotId), ["slot-1", "slot-2", "slot-3"]);
+    assert.equal(shrunkBody.resize.direction, "shrink");
+    assert.equal(shrunkBody.resize.previousSlotCount, 4);
+    assert.equal(shrunkBody.resize.nextSlotCount, 3);
+  } finally {
+    await app.close();
+  }
+});
+
+test("POST /api/projects/:projectId/slots/resize returns structured shrink failure with su-cancel blocker details", async () => {
+  const project = await createResizeProject(4);
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Shrink blocked requirement",
+      description: "resize shrink fixture",
+      status: "planning"
+    }
+  });
+  await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job-slot-route-shrink-cancel",
+      anchorId: "slot-4",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: "/ccb:su-cancel job_456",
+      status: "submitted"
+    }
+  });
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      slotResizeService: resizeService()
+    }
+  });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/slots/resize`,
+      payload: { direction: "shrink" }
+    });
+
+    assert.equal(response.statusCode, 409, response.body);
+    const body = response.json() as {
+      ok: false;
+      reason: string;
+      details: { queueRows?: Array<{ command: string; status: string }> };
+    };
+    assert.equal(body.ok, false);
+    assert.equal(body.reason, "queue_not_empty");
+    assert.equal(body.details.queueRows?.[0]?.command, "/ccb:su-cancel job_456");
+    assert.equal(body.details.queueRows?.[0]?.status, "submitted");
+  } finally {
+    await app.close();
+  }
+});
+
+test("POST /api/projects/:projectId/slots/resize records offline desired grow without reload", async () => {
+  const project = await createResizeProject(3);
+  const reload = vi.fn(async () => publishedReload());
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      slotResizeService: resizeService({
+        runtime: mockRuntime({ isOnline: async () => false }),
+        reload
+      })
+    }
+  });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/slots/resize`,
+      payload: { direction: "grow" }
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    const body = response.json() as {
+      slotCount: number;
+      resize: { ok: true; direction: string; mode: string; previousSlotCount: number; nextSlotCount: number };
+    };
+    assert.equal(body.slotCount, 4);
+    assert.equal(body.resize.direction, "grow");
+    assert.equal(body.resize.mode, "offline_desired");
+    assert.equal(reload.mock.calls.length, 0);
   } finally {
     await app.close();
   }
@@ -419,6 +718,105 @@ test("POST requirement bind-slot claims the first idle slot and returns the refr
     assert.match(config, /"slot-1: Existing Requirement"/);
     assert.match(config, /"slot-2: Manual Bind Requirement"/);
   } finally {
+    await app.close();
+  }
+});
+
+test("POST requirement bind-slot waits for an in-flight resize lock and then succeeds", async () => {
+  const project = await createProject();
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Lock Wait Requirement",
+      description: "lock wait fixture",
+      status: "planning"
+    }
+  });
+  const resizeLock = new ManagedConfigMutationLock();
+  let releaseLock!: () => void;
+  let enteredLock!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enteredLock = resolve;
+  });
+  const release = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  const holding = resizeLock.runExclusive(project.id, async () => {
+    enteredLock();
+    await release;
+  });
+  await entered;
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      resizeLock,
+      resizeLockWaitTimeoutMs: 200
+    }
+  });
+
+  try {
+    const pending = app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/requirements/${requirement.id}/bind-slot`
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    releaseLock();
+    await holding;
+    const response = await pending;
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().slot.slotId, "slot-1");
+  } finally {
+    releaseLock();
+    await holding.catch(() => undefined);
+    await app.close();
+  }
+});
+
+test("POST requirement bind-slot returns 409 when resize lock wait times out", async () => {
+  const project = await createProject();
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Lock Timeout Requirement",
+      description: "lock timeout fixture",
+      status: "planning"
+    }
+  });
+  const resizeLock = new ManagedConfigMutationLock();
+  let releaseLock!: () => void;
+  let enteredLock!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enteredLock = resolve;
+  });
+  const release = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  const holding = resizeLock.runExclusive(project.id, async () => {
+    enteredLock();
+    await release;
+  });
+  await entered;
+  const app = buildApp({
+    enableFileWatcher: false,
+    slots: {
+      resizeLock,
+      resizeLockWaitTimeoutMs: 5
+    }
+  });
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/requirements/${requirement.id}/bind-slot`
+    });
+
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(response.json().code, "SLOT_RESIZE_LOCK_TIMEOUT");
+    assert.equal(await prisma.slotBinding.count({ where: { projectId: project.id } }), 0);
+  } finally {
+    releaseLock();
+    await holding.catch(() => undefined);
     await app.close();
   }
 });

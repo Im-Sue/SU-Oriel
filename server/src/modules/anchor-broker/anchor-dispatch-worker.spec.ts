@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test, vi } from "vitest";
 
 import { prisma } from "../../db/prisma.js";
+import { ManagedConfigMutationLock } from "../project-ccbd/managed-config-mutation-lock.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
 import { AnchorSocketNotReadyError } from "./anchor-broker.errors.js";
 import { runAnchorDispatchWorkerTick } from "./anchor-dispatch-worker.js";
@@ -286,4 +287,78 @@ test("runAnchorDispatchWorkerTick submits slot-4 dispatches through the project 
     where: { projectId_slotId: { projectId: project.id, slotId: "slot-4" } }
   });
   assert.equal(binding.state, "busy");
+});
+
+test("runAnchorDispatchWorkerTick records 409 semantics when resize lock wait times out", async () => {
+  const suffix = randomUUID();
+  const project = await prisma.project.create({
+    data: {
+      name: `dispatch-worker-slot-lock-${suffix}`,
+      localPath: join(tmpdir(), `ccb-dispatch-worker-slot-lock-${suffix}`),
+      slotCount: 4
+    }
+  });
+  const requirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      title: "Slot dispatch worker lock",
+      description: "Slot dispatch lock fixture",
+      status: "planning"
+    }
+  });
+  await prisma.slotBinding.create({
+    data: {
+      projectId: project.id,
+      slotId: "slot-4",
+      requirementId: requirement.id,
+      state: "bound"
+    }
+  });
+  const queue = await prisma.anchorDispatchQueue.create({
+    data: {
+      jobId: "job_worker_slot_lock_timeout",
+      anchorId: "slot-4",
+      subjectType: "requirement",
+      subjectId: requirement.id,
+      command: "/ccb:su-flow --payload {}",
+      status: "pending"
+    }
+  });
+  const resizeLock = new ManagedConfigMutationLock();
+  let releaseLock!: () => void;
+  let enteredLock!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    enteredLock = resolve;
+  });
+  const release = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  const holding = resizeLock.runExclusive(project.id, async () => {
+    enteredLock();
+    await release;
+  });
+  await entered;
+
+  try {
+    const result = await runAnchorDispatchWorkerTick({
+      prismaClient: prisma,
+      resizeLock,
+      resizeLockWaitTimeoutMs: 5,
+      waitForClaudeTuiReady: vi.fn(async () => ({ ready: true, elapsedMs: 1, lastTitles: ["slot-4"] }))
+    });
+
+    assert.deepEqual(result, { count: 1, submitted: 0, failed: 1 });
+    const updated = await prisma.anchorDispatchQueue.findUniqueOrThrow({ where: { id: queue.id } });
+    assert.equal(updated.status, "failed");
+    assert.match(updated.errorMessage ?? "", /slot resize lock wait timed out/);
+    const event = await prisma.eventJournal.findFirstOrThrow({
+      where: { eventType: "anchor_dispatch_failed", correlationId: queue.jobId }
+    });
+    const payload = JSON.parse(event.payloadJson) as { errorCode: string; errorMessage: string };
+    assert.equal(payload.errorCode, "SLOT_RESIZE_LOCK_TIMEOUT");
+    assert.match(payload.errorMessage, /slot resize lock wait timed out/);
+  } finally {
+    releaseLock();
+    await holding.catch(() => undefined);
+  }
 });

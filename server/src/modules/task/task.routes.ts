@@ -22,6 +22,10 @@ import {
 import { serializeWorkspace } from "../workspace/workspace.routes.js";
 import { AnchorDispatchQueuePolicyError } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { JobSlotRouter } from "../slot-binding/job-slot-router.js";
+import {
+  isSlotResizeLockTimeoutError,
+  slotResizeLockTimeoutBody
+} from "../slot-resize/resize-lock.js";
 import { loadTaskMarkdownBody, TaskMarkdownNotFoundError } from "./task-markdown.service.js";
 
 interface TaskNodeFields {
@@ -1028,6 +1032,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
           message: error.message
         };
       }
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
+      }
       const code = error instanceof Error ? error.message : "anchor_dispatch_failed";
       reply.status(code === "planning_anchor_missing" || code === "planning_anchor_paused" ? 409 : 500);
       return {
@@ -1071,6 +1079,10 @@ export async function registerTaskRoutes(app: FastifyInstance): Promise<void> {
           code: error.code,
           message: error.message
         };
+      }
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
       }
       const code = error instanceof Error ? error.message : "anchor_dispatch_failed";
       reply.status(code === "planning_anchor_missing" || code === "planning_anchor_paused" ? 409 : 500);

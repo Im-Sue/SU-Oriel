@@ -10,6 +10,11 @@ import {
 } from "../anchor-broker/anchor-dispatch-queue-policy.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
 import { emitEventInTransaction } from "../events/event-journal.service.js";
+import type { ManagedConfigMutationLock } from "../project-ccbd/managed-config-mutation-lock.js";
+import {
+  DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS,
+  waitForSlotResizeLock
+} from "../slot-resize/resize-lock.js";
 import { agentNamesForSlot } from "../slot-topology/slot-topology.service.js";
 import { SlotBindingService, type SlotId, isSlotId } from "./slot-binding.service.js";
 
@@ -56,20 +61,30 @@ export class JobSlotRouter {
   private readonly slotBinding: SlotBindingService;
   private readonly submitToSlot: SubmitToSlot;
   private readonly submitImmediately: boolean;
+  private readonly resizeLock: ManagedConfigMutationLock | undefined;
+  private readonly resizeLockWaitTimeoutMs: number;
 
   constructor(options: {
     prismaClient?: PrismaClient;
     slotBinding?: SlotBindingService;
     submitToSlot?: SubmitToSlot;
     submitImmediately?: boolean;
+    resizeLock?: ManagedConfigMutationLock;
+    resizeLockWaitTimeoutMs?: number;
   } = {}) {
     this.client = options.prismaClient ?? prisma;
     this.slotBinding = options.slotBinding ?? new SlotBindingService(this.client);
     this.submitToSlot = options.submitToSlot ?? defaultSubmitToSlot;
     this.submitImmediately = options.submitImmediately ?? false;
+    this.resizeLock = options.resizeLock;
+    this.resizeLockWaitTimeoutMs = options.resizeLockWaitTimeoutMs ?? DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS;
   }
 
   async enqueue(input: SlotQueuedRequest): Promise<JobSlotRouterResult> {
+    await waitForSlotResizeLock(input.projectId, {
+      lock: this.resizeLock,
+      timeoutMs: this.resizeLockWaitTimeoutMs
+    });
     const jobId = input.jobId ?? createSlotDispatchJobId();
     const queuedAt = input.requestedAt ?? new Date();
     await enforceRequirementDispatchQueuePolicy(this.client, {
@@ -152,6 +167,10 @@ export class JobSlotRouter {
   }
 
   async tick(projectId: string): Promise<{ submitted: number; queued: number; failed: number }> {
+    await waitForSlotResizeLock(projectId, {
+      lock: this.resizeLock,
+      timeoutMs: this.resizeLockWaitTimeoutMs
+    });
     const rows = await this.client.anchorDispatchQueue.findMany({
       where: {
         status: "pending",

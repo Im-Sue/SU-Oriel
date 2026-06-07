@@ -5,8 +5,14 @@ import type { AnchorDispatchQueue, PrismaClient } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 import { CcbdClientService } from "../ccbd-client/ccbd-client.service.js";
 import { emitEventInTransaction } from "../events/event-journal.service.js";
+import type { ManagedConfigMutationLock } from "../project-ccbd/managed-config-mutation-lock.js";
 import { claudeAgentForSlot } from "../slot-binding/job-slot-router.js";
 import { isSlotId } from "../slot-binding/slot-binding.service.js";
+import {
+  DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS,
+  isSlotResizeLockTimeoutError,
+  runWithSlotResizeLock
+} from "../slot-resize/resize-lock.js";
 import { AnchorBrokerError, AnchorNotFoundError } from "./anchor-broker.errors.js";
 import type { AskAcrossAnchorInput } from "./ask-router.service.js";
 import { AskRouterService } from "./ask-router.service.js";
@@ -36,6 +42,8 @@ export interface StartAnchorDispatchWorkerOptions {
   logger?: AnchorDispatchWorkerLogger;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  resizeLock?: ManagedConfigMutationLock;
+  resizeLockWaitTimeoutMs?: number;
 }
 
 export interface AnchorDispatchWorkerTickResult {
@@ -53,6 +61,8 @@ interface WorkerConfig {
   logger?: AnchorDispatchWorkerLogger;
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
+  resizeLock?: ManagedConfigMutationLock;
+  resizeLockWaitTimeoutMs: number;
 }
 
 type DispatchProject = {
@@ -115,7 +125,9 @@ function normalizeOptions(options: StartAnchorDispatchWorkerOptions): WorkerConf
     waitForClaudeTuiReady: options.waitForClaudeTuiReady ?? defaultWaitForClaudeTuiReady,
     logger: options.logger,
     now: options.now ?? (() => new Date()),
-    sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+    sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    resizeLock: options.resizeLock,
+    resizeLockWaitTimeoutMs: options.resizeLockWaitTimeoutMs ?? DEFAULT_SLOT_RESIZE_LOCK_WAIT_TIMEOUT_MS
   };
 }
 
@@ -171,7 +183,14 @@ async function processAnchorDispatchRow(
       if (!isSlotId(row.anchorId, project.slotCount)) {
         throw new Error(`slot ${row.anchorId} is outside project topology`);
       }
-      return await processSlotDispatchRow(config, row, project);
+      return await runWithSlotResizeLock(
+        project.id,
+        async () => await processSlotDispatchRow(config, row, project),
+        {
+          lock: config.resizeLock,
+          timeoutMs: config.resizeLockWaitTimeoutMs
+        }
+      );
     }
     const askInput = await buildAskInput(config.prismaClient, row);
     const anchor = await config.prismaClient.anchorAllocation.findUnique({
@@ -376,7 +395,9 @@ async function recordAnchorDispatchFailure(
   error: unknown
 ): Promise<void> {
   const message = errorMessage(error);
-  const errorCode = error instanceof AnchorBrokerError ? error.code : "ANCHOR_DISPATCH_FAILED";
+  const errorCode = isSlotResizeLockTimeoutError(error)
+    ? error.code
+    : error instanceof AnchorBrokerError ? error.code : "ANCHOR_DISPATCH_FAILED";
   await config.prismaClient.$transaction(async (tx) => {
     await tx.anchorDispatchQueue.update({
       where: {

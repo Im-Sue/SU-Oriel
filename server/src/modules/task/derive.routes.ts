@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 
 import { prisma } from "../../db/prisma.js";
+import {
+  isSlotResizeLockTimeoutError,
+  slotResizeLockTimeoutBody
+} from "../slot-resize/resize-lock.js";
 import { deriveTaskSchema } from "./derive.schemas.js";
 import { DeriveTaskError, deriveFromTask } from "./derive.service.js";
 
@@ -26,6 +30,10 @@ export async function registerDeriveRoutes(app: FastifyInstance): Promise<void> 
         return {
           message: error.message
         };
+      }
+      if (isSlotResizeLockTimeoutError(error)) {
+        reply.status(error.statusCode);
+        return slotResizeLockTimeoutBody(error);
       }
       throw error;
     }

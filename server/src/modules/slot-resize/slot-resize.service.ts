@@ -55,6 +55,21 @@ export type SlotResizeFailure = {
 
 export type SlotResizeResult = SlotResizeSuccess | SlotResizeFailure;
 
+export type SlotShrinkEligibilitySummary = {
+  projectId: string;
+  slotCount: number;
+  tailSlotId: SlotId | null;
+  canShrink: boolean;
+  eligible: boolean;
+  checks: {
+    slotBindingIdle: boolean;
+    queueClear: boolean;
+    runtimeIdle: boolean;
+  };
+  reasons: string[];
+  details: Record<string, unknown>;
+};
+
 type ResizeProject = {
   id: string;
   localPath: string;
@@ -191,9 +206,15 @@ export class SlotResizeService {
       const previousSlotCount = project.slotCount;
       const nextSlotCount = previousSlotCount - 1;
       const tailSlotId = `slot-${previousSlotCount}` as SlotId;
-      const eligibility = await this.checkShrinkEligibility(project, tailSlotId);
-      if (!eligibility.ok) {
-        return failure("shrink", projectId, previousSlotCount, eligibility.reason, eligibility.details);
+      const eligibility = await this.inspectShrinkEligibility(project, tailSlotId);
+      if (!eligibility.eligible) {
+        return failure(
+          "shrink",
+          projectId,
+          previousSlotCount,
+          eligibility.reasons[0] ?? "slot_not_shrinkable",
+          eligibility.details
+        );
       }
 
       const oldConfigText = await readManagedConfig(project.localPath);
@@ -262,10 +283,34 @@ export class SlotResizeService {
     });
   }
 
-  private async checkShrinkEligibility(
+  async getShrinkEligibility(projectId: string): Promise<SlotShrinkEligibilitySummary | null> {
+    const project = await this.findProject(projectId);
+    if (!project) {
+      return null;
+    }
+    if (project.slotCount <= MIN_PROJECT_SLOT_COUNT) {
+      return {
+        projectId,
+        slotCount: project.slotCount,
+        tailSlotId: null,
+        canShrink: false,
+        eligible: false,
+        checks: {
+          slotBindingIdle: true,
+          queueClear: true,
+          runtimeIdle: true
+        },
+        reasons: ["slot_count_min"],
+        details: { min: MIN_PROJECT_SLOT_COUNT }
+      };
+    }
+    return await this.inspectShrinkEligibility(project, `slot-${project.slotCount}` as SlotId);
+  }
+
+  private async inspectShrinkEligibility(
     project: ResizeProject,
     slotId: SlotId
-  ): Promise<{ ok: true } | { ok: false; reason: string; details: Record<string, unknown> }> {
+  ): Promise<SlotShrinkEligibilitySummary> {
     const binding = await this.client.slotBinding.findUnique({
       where: {
         projectId_slotId: {
@@ -274,32 +319,49 @@ export class SlotResizeService {
         }
       }
     });
-    if (binding && (binding.state !== "idle" || binding.requirementId !== null)) {
-      return {
-        ok: false,
-        reason: "slot_not_idle",
-        details: { slotId, state: binding.state, requirementId: binding.requirementId }
-      };
-    }
-
     const queueRows = await findBlockingQueueRows(this.client, project.id, slotId);
-    if (queueRows.length > 0) {
-      return {
-        ok: false,
-        reason: "queue_not_empty",
-        details: { slotId, rows: queueRows }
-      };
-    }
-
     const online = await this.runtime.isOnline(project.localPath);
-    if (online && await this.runtime.hasActiveSlotJob({ projectRoot: project.localPath, slotId })) {
-      return {
-        ok: false,
-        reason: "runtime_job_active",
-        details: { slotId }
+    const hasActiveRuntimeJob = online
+      ? await this.runtime.hasActiveSlotJob({ projectRoot: project.localPath, slotId })
+      : false;
+    const slotBindingIdle = !binding || (binding.state === "idle" && binding.requirementId === null);
+    const queueClear = queueRows.length === 0;
+    const runtimeIdle = !hasActiveRuntimeJob;
+    const reasons = [
+      ...(!slotBindingIdle ? ["slot_not_idle"] : []),
+      ...(!queueClear ? ["queue_not_empty"] : []),
+      ...(!runtimeIdle ? ["runtime_job_active"] : [])
+    ];
+    const details: Record<string, unknown> = {
+      slotId,
+      runtimeOnline: online
+    };
+    if (binding) {
+      details.binding = {
+        state: binding.state,
+        requirementId: binding.requirementId
       };
     }
-    return { ok: true };
+    if (queueRows.length > 0) {
+      details.queueRows = queueRows;
+    }
+    if (hasActiveRuntimeJob) {
+      details.runtimeJobActive = true;
+    }
+    return {
+      projectId: project.id,
+      slotCount: project.slotCount,
+      tailSlotId: slotId,
+      canShrink: project.slotCount > MIN_PROJECT_SLOT_COUNT,
+      eligible: slotBindingIdle && queueClear && runtimeIdle,
+      checks: {
+        slotBindingIdle,
+        queueClear,
+        runtimeIdle
+      },
+      reasons,
+      details
+    };
   }
 
   private async restoreProject(project: ResizeProject, oldConfigText: string | null): Promise<void> {
@@ -509,13 +571,11 @@ function defaultSlotResizeRuntime(): SlotResizeRuntime {
 function slotIsActive(view: CcbdProjectView, slotId: SlotId, agentNames: readonly string[]): boolean {
   const window = view.windows?.find((candidate) => candidate.name === slotId);
   if (!window) return false;
-  const activeAgents = new Set(
-    (view.agents ?? [])
-      .filter((agent) => agent.active !== false)
-      .map((agent) => agent.name)
-      .filter((name): name is string => typeof name === "string")
-  );
-  return agentNames.every((agentName) => window.agents?.includes(agentName) && activeAgents.has(agentName));
+  const agentsByName = new Map((view.agents ?? []).map((agent) => [agent.name, agent]));
+  return agentNames.every((agentName) => {
+    const agent = agentsByName.get(agentName);
+    return window.agents?.includes(agentName) && Boolean(agent?.pane_id);
+  });
 }
 
 function hasActiveQueueState(value: unknown): boolean {
