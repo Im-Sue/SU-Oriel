@@ -353,6 +353,66 @@
   color: var(--red-600);
 }
 
+.resizeControl {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.slotCountBadge {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-700);
+  background: #ffffff;
+}
+
+.resourceHint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--amber-600);
+}
+
+.shrinkIntro {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--gray-700);
+}
+
+.eligibilityList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eligibilityItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--gray-700);
+}
+
+.eligibilityMark {
+  font-weight: 700;
+}
+
+.eligibilityItem[data-ok="true"] .eligibilityMark {
+  color: var(--green-700);
+}
+
+.eligibilityItem[data-ok="false"] .eligibilityMark {
+  color: var(--red-600);
+}
+
 @media (max-width: 760px) {
   .header,
   .mainLane,

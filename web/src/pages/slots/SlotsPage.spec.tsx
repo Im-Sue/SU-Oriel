@@ -10,11 +10,14 @@ import {
   fetchSlots,
   releaseSlot,
   renewSlot,
+  resizeSlots,
   type ProjectCcbdStatusView,
   type SlotLaneView,
-  type SlotProjectionView
+  type SlotProjectionView,
+  type SlotResizeResponse
 } from "../../lib/console-api.js";
 import { useProjectStore } from "../../stores/project-store.js";
+import { useUIStore } from "../../stores/ui-store.js";
 import { SlotsPage } from "./SlotsPage.js";
 
 vi.mock("../../lib/console-api.js", () => ({
@@ -24,7 +27,8 @@ vi.mock("../../lib/console-api.js", () => ({
   fetchProjectCcbdStatus: vi.fn(),
   fetchSlots: vi.fn(),
   releaseSlot: vi.fn(),
-  renewSlot: vi.fn()
+  renewSlot: vi.fn(),
+  resizeSlots: vi.fn()
 }));
 
 function slot(slotId: string, overrides: Partial<SlotLaneView> = {}): SlotLaneView {
@@ -94,6 +98,29 @@ const projection: SlotProjectionView = {
   generatedAt: "2026-05-22T00:00:00.000Z"
 };
 
+function topologyProjection(slotCount: number): SlotProjectionView {
+  return {
+    ...projection,
+    project: { ...projection.project, slotCount },
+    slotCount,
+    slots: Array.from({ length: slotCount }, (_, index) => slot(`slot-${index + 1}`)),
+    queue: [],
+    shrinkEligibility: {
+      projectId: "project-1",
+      slotCount,
+      tailSlotId: `slot-${slotCount}`,
+      canShrink: slotCount > 1,
+      eligible: true,
+      checks: { slotBindingIdle: true, queueClear: true, runtimeIdle: true },
+      reasons: [],
+      details: {}
+    }
+  };
+}
+
+const fourSlotProjection = topologyProjection(4);
+const sixSlotProjection = topologyProjection(6);
+
 const projectCcbdReady: ProjectCcbdStatusView = {
   projectId: "project-1",
   projectRoot: "/tmp/su-ccb",
@@ -153,7 +180,13 @@ describe("SlotsPage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     useProjectStore.setState({ projects: [], selectedProjectId: null });
+    useUIStore.setState({ toasts: [] });
   });
+
+  function lastToastMessage(): string | null {
+    const toasts = useUIStore.getState().toasts;
+    return toasts.length > 0 ? toasts[toasts.length - 1]!.message : null;
+  }
 
   it("renders main lane, three slot rows, bound requirement, queue, and health badges", async () => {
     render(
@@ -265,5 +298,161 @@ describe("SlotsPage", () => {
     expect(await screen.findByText("已保留 slot-3，等待下一次检测或人工处理")).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /强制释放 slot-3/ })).toBeInTheDocument();
+  });
+
+  it("renders four dynamic slot lanes with topology-aware subtitle", async () => {
+    vi.mocked(fetchSlots).mockResolvedValue(fourSlotProjection);
+
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("main")).toBeInTheDocument();
+    expect(screen.getAllByTestId("slot-row")).toHaveLength(4);
+    expect(screen.getByTestId("slot-count")).toHaveTextContent("4 个 slot");
+    expect(screen.getByText(/slot-1 到 slot-4 承载 requirement/)).toBeInTheDocument();
+    expect(screen.queryByTestId("slot-resource-hint")).not.toBeInTheDocument();
+  });
+
+  it("grows directly from the + control and reports the new topology", async () => {
+    const grown: SlotResizeResponse = {
+      ...fourSlotProjection,
+      resize: {
+        ok: true,
+        direction: "grow",
+        mode: "reloaded",
+        projectId: "project-1",
+        previousSlotCount: 3,
+        nextSlotCount: 4,
+        reload: null,
+        reset: null
+      }
+    };
+    vi.mocked(resizeSlots).mockResolvedValue(grown);
+
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("main");
+    fireEvent.click(screen.getByRole("button", { name: "扩容" }));
+
+    await waitFor(() => expect(resizeSlots).toHaveBeenCalledWith("project-1", { direction: "grow" }));
+    await waitFor(() => expect(screen.getAllByTestId("slot-row")).toHaveLength(4));
+    expect(lastToastMessage()).toBe("已扩容至 4 个 slot，slot-4 已就绪");
+  });
+
+  it("opens the shrink confirmation dialog with tail slot and three eligibility checks", async () => {
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("main");
+    fireEvent.click(screen.getByRole("button", { name: "缩容" }));
+
+    expect(await screen.findByText("缩容确认：回收 slot-3")).toBeInTheDocument();
+    const checklist = screen.getByRole("list", { name: "缩容资格检查" });
+    expect(checklist).toHaveTextContent("绑定空闲");
+    expect(checklist).toHaveTextContent("队列清空");
+    expect(checklist).toHaveTextContent("运行时空闲");
+    expect(screen.getByText(/当前资格快照不满足/)).toHaveTextContent("尾部 slot 仍被 requirement 占用");
+
+    vi.mocked(resizeSlots).mockResolvedValue({
+      ...projection,
+      resize: {
+        ok: true,
+        direction: "shrink",
+        mode: "reloaded",
+        projectId: "project-1",
+        previousSlotCount: 3,
+        nextSlotCount: 2,
+        reload: null,
+        reset: null
+      }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "确认缩容" }));
+    await waitFor(() => expect(resizeSlots).toHaveBeenCalledWith("project-1", { direction: "shrink" }));
+    expect(lastToastMessage()).toBe("已缩容至 2 个 slot");
+  });
+
+  it("surfaces structured shrink rejection including pending su-cancel queue rows", async () => {
+    const apiError = Object.assign(new Error("调整 Slot 数量失败"), {
+      status: 409,
+      payload: {
+        ok: false,
+        direction: "shrink",
+        projectId: "project-1",
+        previousSlotCount: 3,
+        reason: "queue_not_empty",
+        details: {
+          slotId: "slot-3",
+          rows: [{ jobId: "job-9", status: "pending", command: "/ccb:su-cancel job_123" }]
+        }
+      }
+    });
+    vi.mocked(resizeSlots).mockRejectedValue(apiError);
+
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("main");
+    fireEvent.click(screen.getByRole("button", { name: "缩容" }));
+    fireEvent.click(await screen.findByRole("button", { name: "确认缩容" }));
+
+    await waitFor(() =>
+      expect(lastToastMessage()).toBe(
+        "缩容失败：尾部 slot 队列未清空（队列中存在待执行的 su-cancel 取消指令，缩容已被阻断）"
+      )
+    );
+  });
+
+  it("reports resize lock wait timeout as a structured failure", async () => {
+    const lockError = Object.assign(new Error("调整 Slot 数量失败"), {
+      status: 409,
+      payload: {
+        code: "SLOT_RESIZE_LOCK_TIMEOUT",
+        message: "slot resize lock wait timed out after 2000ms",
+        projectId: "project-1",
+        timeoutMs: 2000
+      }
+    });
+    vi.mocked(resizeSlots).mockRejectedValue(lockError);
+
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("main");
+    fireEvent.click(screen.getByRole("button", { name: "扩容" }));
+
+    await waitFor(() =>
+      expect(lastToastMessage()).toBe("扩容失败：resize 锁等待超时，存在并发拓扑变更，请稍后重试")
+    );
+  });
+
+  it("shows the resource hint once slotCount exceeds five", async () => {
+    vi.mocked(fetchSlots).mockResolvedValue(sixSlotProjection);
+
+    render(
+      <MemoryRouter>
+        <SlotsPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("main");
+    expect(screen.getByTestId("slot-resource-hint")).toHaveTextContent(
+      "当前 6 个 slot：每个 slot 常驻 claude+codex 两个 agent 进程"
+    );
   });
 });
