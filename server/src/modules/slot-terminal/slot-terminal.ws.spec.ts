@@ -26,6 +26,7 @@ import {
 } from "./slot-terminal.input.js";
 import {
   SLOT_TERMINAL_INPUT_MAX_BYTES,
+  SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS,
   evaluateSlotTerminalClientFrame,
   isSlotTerminalOriginAllowed,
   registerSlotTerminalWebSocketRoutes,
@@ -895,6 +896,101 @@ describe("slot-terminal websocket", () => {
         initial: true,
         mode: "stream"
       });
+      socket.terminate();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("reconciles stream mode when the sent history tail diverges from tmux capture", async () => {
+    vi.useFakeTimers();
+    const fixture = createRouteFixture();
+    const streamRecorder = new FakeSlotTerminalStreamRecorder();
+    const capture = buildCapture(
+      { "%7": ["initial-a\n", "tmux-a\ntmux-b\n", "tmux-a\ntmux-b\n"] },
+      { "%7": [{ cols: 80, rows: 24 }, { cols: 80, rows: 24 }, { cols: 80, rows: 24 }] }
+    );
+    const app = buildSlotTerminalWebSocketApp({
+      store: fixture.store,
+      service: fixture.service,
+      capture,
+      streamRecorder
+    });
+
+    try {
+      await app.ready();
+      const { socket } = await collectInjectedMessages(
+        app,
+        `/api/slot-terminal/ws?projectId=${fixture.projectId}&requirementId=${fixture.requirementId}&pane=claude`,
+        2
+      );
+      const subscription = await streamRecorder.waitForSubscription();
+      const streamPromise = collectWebSocketMessages(socket, 1);
+      subscription.emitChunk({ kind: "stream", mode: "stream", seq: 1, data: "client-missing\n" });
+      await streamPromise;
+
+      const resetPromise = collectWebSocketMessages(socket, 1, SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS + 2_000);
+      await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS);
+      const [reset] = await resetPromise;
+
+      expect(reset).toMatchObject({
+        type: "frame",
+        kind: "reset",
+        reason: "reconcile",
+        data: "tmux-a\ntmux-b\n",
+        cols: 80,
+        rows: 24,
+        initial: true,
+        mode: "stream"
+      });
+      socket.terminate();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("keeps stream mode when reconcile capture matches the sent history tail", async () => {
+    vi.useFakeTimers();
+    const fixture = createRouteFixture();
+    const streamRecorder = new FakeSlotTerminalStreamRecorder();
+    const capture = buildCapture(
+      { "%7": ["line-a\n", "line-a\nline-b\n"] },
+      { "%7": [{ cols: 80, rows: 24 }, { cols: 80, rows: 24 }] }
+    );
+    const app = buildSlotTerminalWebSocketApp({
+      store: fixture.store,
+      service: fixture.service,
+      capture,
+      streamRecorder
+    });
+
+    try {
+      await app.ready();
+      const { socket } = await collectInjectedMessages(
+        app,
+        `/api/slot-terminal/ws?projectId=${fixture.projectId}&requirementId=${fixture.requirementId}&pane=claude`,
+        2
+      );
+      const subscription = await streamRecorder.waitForSubscription();
+      const streamPromise = collectWebSocketMessages(socket, 1);
+      subscription.emitChunk({ kind: "stream", mode: "stream", seq: 1, data: "line-b\n" });
+      await streamPromise;
+
+      await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS);
+      await Promise.resolve();
+
+      expect(capture.calls).toEqual([
+        {
+          target: "%7",
+          socketPath: join(fixture.projectRoot, ".ccb", "ccbd", "tmux.sock"),
+          initial: true
+        },
+        {
+          target: "%7",
+          socketPath: join(fixture.projectRoot, ".ccb", "ccbd", "tmux.sock"),
+          initial: true
+        }
+      ]);
       socket.terminate();
     } finally {
       await app.close();
@@ -2000,13 +2096,14 @@ function webSocketRequest(origin = ALLOWED_ORIGIN): Partial<IncomingMessage> {
 
 function collectWebSocketMessages(
   socket: { on: (event: "message" | "error", handler: (...args: unknown[]) => void) => void },
-  count: number
+  count: number,
+  timeoutMs = 2_000
 ): Promise<Array<Record<string, unknown>>> {
   return new Promise((resolve, reject) => {
     const messages: Array<Record<string, unknown>> = [];
     const timeout = setTimeout(() => {
       reject(new Error(`timed out waiting for ${count} websocket messages`));
-    }, 2_000);
+    }, timeoutMs);
     socket.on("message", (data) => {
       messages.push(JSON.parse(String(data)) as Record<string, unknown>);
       if (messages.length === count) {

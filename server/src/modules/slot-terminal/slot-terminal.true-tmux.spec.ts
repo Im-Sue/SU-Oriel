@@ -34,6 +34,7 @@ const tmuxAvailable = await isTmuxAvailable();
 const itWithTmux = tmuxAvailable ? it : it.skip;
 const ALLOWED_ORIGIN = "http://localhost:5173";
 const SCROLLBACK_CAP = 2_500;
+const RECONCILED_TAIL_LINES = 2_000;
 
 class TrueTmuxHarness {
   readonly sessionName =
@@ -234,31 +235,52 @@ describe("slot-terminal true tmux integration", () => {
     });
   }, 15_000);
 
-  itWithTmux("keeps the stream data tail aligned with the tmux pane tail beyond the frontend cap", async () => {
+  itWithTmux("eventually aligns the client tail with tmux after cap-sized burst output", async () => {
     await withHarness(async (harness) => {
       const registry = new SlotTerminalStreamRecorderRegistry();
-      const chunks: SlotTerminalStreamChunk[] = [];
-      const subscription = await registry.subscribe({
-        target: harness.paneId,
-        socketPath: harness.socketPath,
-        callbacks: { onChunk: (chunk) => chunks.push(chunk) }
-      });
+      const app = buildTrueTmuxWebSocketApp({ harness, streamRecorder: registry });
       const lines = numberedLines("cap-tail", SCROLLBACK_CAP + 25);
-      const expectedTail = lines.slice(-SCROLLBACK_CAP);
 
-      await harness.sendLines(lines);
-      await waitForLines(chunks, "cap-tail-", lines.length, 10_000);
-      await harness.waitForPaneLine(lines.at(-1) ?? "");
+      try {
+        await app.ready();
+        const { socket, messages } = await observeInjectedMessages(
+          app,
+          "/api/slot-terminal/ws?projectId=project-1&requirementId=req-1&pane=claude"
+        );
+        await waitFor(() => messages.length >= 2, "initial websocket snapshot was not received");
 
-      const streamTail = linesWithPrefix(chunks.map((chunk) => chunk.data).join(""), "cap-tail-").slice(-SCROLLBACK_CAP);
-      const tmuxTail = linesWithPrefix(await harness.capturePane(SCROLLBACK_CAP + 100), "cap-tail-").slice(-SCROLLBACK_CAP);
-      expect(streamTail).toEqual(expectedTail);
-      expect(tmuxTail).toEqual(expectedTail);
-      expect(streamTail).not.toContain(lines[0]);
-      await subscription.release();
-      await registry.closeAll();
+        await harness.sendLines(lines);
+        await harness.waitForPaneLine(lines.at(-1) ?? "");
+        const tmuxTail = linesWithPrefix(await harness.capturePane(SCROLLBACK_CAP + 100), "cap-tail-").slice(
+          -SCROLLBACK_CAP
+        );
+
+        await waitFor(
+          () => {
+            const clientTail = clientModelLines(messages, "cap-tail-");
+            const compareCount = Math.min(tmuxTail.length, RECONCILED_TAIL_LINES);
+            return (
+              clientTail.length >= compareCount &&
+              lastLines(clientTail, compareCount).join("\n") === lastLines(tmuxTail, compareCount).join("\n")
+            );
+          },
+          "client tail did not align with tmux after burst output and reconcile",
+          15_000
+        );
+
+        const finalClientTail = clientModelLines(messages, "cap-tail-");
+        const compareCount = Math.min(tmuxTail.length, RECONCILED_TAIL_LINES);
+        expect(compareCount).toBeGreaterThan(0);
+        expect(finalClientTail.length).toBeGreaterThanOrEqual(compareCount);
+        expect(lastLines(finalClientTail, compareCount)).toEqual(lastLines(tmuxTail, compareCount));
+        expect(tmuxTail).not.toContain(lines[0]);
+        socket.terminate();
+      } finally {
+        await app.close();
+        await registry.closeAll();
+      }
     });
-  }, 20_000);
+  }, 30_000);
 
   itWithTmux("replays hidden output from the ring and reports a gap after the ring is exceeded", async () => {
     await withHarness(async (harness) => {
@@ -505,6 +527,26 @@ function collectInjectedMessages(
   });
 }
 
+function observeInjectedMessages(
+  app: ReturnType<typeof buildTrueTmuxWebSocketApp>,
+  url: string
+): Promise<{ socket: { send: (data: string) => void; terminate: () => void }; messages: Array<Record<string, unknown>> }> {
+  return new Promise((resolve, reject) => {
+    void app
+      .injectWS(url, webSocketRequest(), {
+        onInit(ws) {
+          const messages: Array<Record<string, unknown>> = [];
+          ws.on("message", (data) => {
+            messages.push(JSON.parse(String(data)) as Record<string, unknown>);
+          });
+          ws.on("error", () => reject(new Error("websocket error")));
+          resolve({ socket: ws, messages });
+        }
+      })
+      .catch(reject);
+  });
+}
+
 function collectWebSocketMessages(
   socket: { on: (event: "message" | "error", handler: (...args: unknown[]) => void) => void },
   count: number
@@ -526,6 +568,27 @@ function collectWebSocketMessages(
       reject(new Error("websocket error"));
     });
   });
+}
+
+function clientModelLines(messages: Array<Record<string, unknown>>, prefix: string): string[] {
+  let data = "";
+  for (const message of messages) {
+    if (message.type !== "frame") {
+      continue;
+    }
+    if (message.kind === "stream") {
+      data += String(message.data ?? "");
+      continue;
+    }
+    if (message.initial === true || message.kind === "reset") {
+      data = String(message.data ?? "");
+    }
+  }
+  return linesWithPrefix(data, prefix);
+}
+
+function lastLines(lines: string[], count: number): string[] {
+  return lines.slice(-count);
 }
 
 async function isTmuxAvailable(): Promise<boolean> {

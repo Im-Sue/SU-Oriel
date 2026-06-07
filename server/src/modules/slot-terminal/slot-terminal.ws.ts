@@ -42,6 +42,9 @@ import {
 } from "./slot-terminal-stream-recorder.js";
 
 export const SLOT_TERMINAL_INPUT_MAX_BYTES = 64 * 1024;
+export const SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS = 10_000;
+const SLOT_TERMINAL_STREAM_RECONCILE_COMPARE_LINES = 2_000;
+const SLOT_TERMINAL_STREAM_HISTORY_BUFFER_LINES = 2_500;
 
 type SlotTerminalStreamRecorderDependency = Pick<SlotTerminalStreamRecorderRegistry, "subscribe">;
 
@@ -362,6 +365,9 @@ async function startSlotTerminalStreamMode(input: {
   let bufferedChunks: SlotTerminalStreamChunk[] = [];
   let streamQueue = Promise.resolve();
   let streamSubscription: SlotTerminalStreamSubscription | null = null;
+  let reconcileTimer: NodeJS.Timeout | null = null;
+  let reconcileInFlight = false;
+  const clientHistory = createTerminalLineTail(SLOT_TERMINAL_STREAM_HISTORY_BUFFER_LINES);
 
   const targetInput = {
     target: input.subscription.target,
@@ -409,6 +415,7 @@ async function startSlotTerminalStreamMode(input: {
   };
   const sendReset = async (reason: "resize" | "gap" | "error" | "reconcile") => {
     const frame = await captureStructuralFrame(true);
+    clientHistory.reset(frame.data);
     sendFrame({
       type: "frame",
       kind: "reset",
@@ -417,6 +424,73 @@ async function startSlotTerminalStreamMode(input: {
       initial: true,
       mode
     });
+  };
+  const shouldRunReconcile = () =>
+    mode === "stream" &&
+    initialSnapshotSent &&
+    !input.isClosed() &&
+    input.getCurrentHint()?.visibility !== "hidden";
+  const scheduleReconcile = () => {
+    if (reconcileTimer || input.isClosed() || mode !== "stream" || !initialSnapshotSent) {
+      return;
+    }
+    reconcileTimer = setTimeout(() => {
+      reconcileTimer = null;
+      if (!shouldRunReconcile()) {
+        scheduleReconcile();
+        return;
+      }
+      enqueueReconcileCheck();
+    }, SLOT_TERMINAL_STREAM_RECONCILE_INTERVAL_MS);
+    reconcileTimer.unref?.();
+  };
+  const stopReconcile = () => {
+    if (reconcileTimer) {
+      clearTimeout(reconcileTimer);
+      reconcileTimer = null;
+    }
+  };
+  const captureReconcileLines = async () =>
+    terminalComparableLines(await input.capture.capturePane({ ...targetInput, initial: true }));
+  const isClientHistoryAligned = (tmuxLines: string[]) => {
+    const clientLines = clientHistory.lines();
+    if (tmuxLines.length === 0 || clientLines.length === 0) {
+      return true;
+    }
+    const compareCount = Math.min(tmuxLines.length, SLOT_TERMINAL_STREAM_RECONCILE_COMPARE_LINES);
+    if (compareCount === 0) {
+      return true;
+    }
+    if (clientLines.length < compareCount) {
+      return false;
+    }
+    const tmuxTail = tmuxLines.slice(-compareCount);
+    const clientTail = clientLines.slice(-compareCount);
+    return tmuxTail.every((line, index) => line === clientTail[index]);
+  };
+  const enqueueReconcileCheck = () => {
+    if (reconcileInFlight) {
+      return;
+    }
+    reconcileInFlight = true;
+    streamQueue = streamQueue
+      .then(async () => {
+        if (!shouldRunReconcile()) {
+          return;
+        }
+        const tmuxLines = await captureReconcileLines();
+        if (!isClientHistoryAligned(tmuxLines)) {
+          await sendReset("reconcile");
+        }
+      })
+      .catch(() => {
+        mode = "snapshot-fallback";
+        ensureFallbackPumpStarted();
+      })
+      .finally(() => {
+        reconcileInFlight = false;
+        scheduleReconcile();
+      });
   };
   const checkResizeAndReset = async (): Promise<boolean> => {
     if (!lastDimensions || !input.capture.getPaneDimensions) {
@@ -459,9 +533,11 @@ async function startSlotTerminalStreamMode(input: {
           seq: chunk.seq,
           mode: "stream"
         });
+        clientHistory.append(chunk.data);
       })
       .catch(() => {
         mode = "snapshot-fallback";
+        stopReconcile();
         ensureFallbackPumpStarted();
       });
   };
@@ -496,7 +572,9 @@ async function startSlotTerminalStreamMode(input: {
             mode: "stream"
           });
         }
+        clientHistory.reset(frame.data);
         initialSnapshotSent = true;
+        scheduleReconcile();
         const chunks = bufferedChunks;
         bufferedChunks = [];
         for (const chunk of chunks) {
@@ -506,6 +584,7 @@ async function startSlotTerminalStreamMode(input: {
       .catch(() => {
         mode = "snapshot-fallback";
         streamSeamStarted = false;
+        stopReconcile();
         ensureFallbackPumpStarted();
       });
   };
@@ -531,6 +610,7 @@ async function startSlotTerminalStreamMode(input: {
         mode = event.mode;
         if (event.mode === "snapshot-fallback") {
           bufferedChunks = [];
+          stopReconcile();
           if (initialSnapshotSent) {
             ensureFallbackPumpStarted();
           }
@@ -546,6 +626,7 @@ async function startSlotTerminalStreamMode(input: {
       onError: () => {
         mode = "snapshot-fallback";
         bufferedChunks = [];
+        stopReconcile();
         if (initialSnapshotSent) {
           enqueueReset("error");
           ensureFallbackPumpStarted();
@@ -555,10 +636,16 @@ async function startSlotTerminalStreamMode(input: {
   });
 
   if (input.isClosed()) {
+    stopReconcile();
     await streamSubscription.release();
     input.setStreamSubscription(null);
     return null;
   }
+  const releaseStreamSubscription = streamSubscription.release.bind(streamSubscription);
+  streamSubscription.release = async () => {
+    stopReconcile();
+    await releaseStreamSubscription();
+  };
   input.setStreamSubscription(streamSubscription);
   if (input.pendingHint) {
     await applySlotTerminalConnectionHint({ pump: null, streamSubscription }, input.pendingHint);
@@ -676,6 +763,69 @@ function mergeSlotTerminalHint(
     visibility: next.visibility ?? previous?.visibility,
     active: typeof next.active === "boolean" ? next.active : previous?.active
   };
+}
+
+function createTerminalLineTail(limit: number): {
+  append(data: string): void;
+  reset(data: string): void;
+  lines(): string[];
+} {
+  let lines: string[] = [];
+  let pendingLine = "";
+
+  const trim = () => {
+    if (lines.length > limit) {
+      lines = lines.slice(-limit);
+    }
+  };
+
+  const append = (data: string) => {
+    const normalized = normalizeTerminalText(data);
+    if (!normalized) {
+      return;
+    }
+    const parts = normalized.split("\n");
+    parts[0] = pendingLine + parts[0];
+    for (const line of parts.slice(0, -1)) {
+      lines.push(line);
+    }
+    pendingLine = parts.at(-1) ?? "";
+    trim();
+  };
+
+  return {
+    append,
+    reset(data: string) {
+      lines = [];
+      pendingLine = "";
+      append(data);
+    },
+    lines() {
+      return lines.slice(-limit);
+    }
+  };
+}
+
+function terminalComparableLines(data: string): string[] {
+  const normalized = normalizeTerminalText(data);
+  if (!normalized) {
+    return [];
+  }
+  const parts = normalized.split("\n");
+  if (parts.at(-1) !== "") {
+    parts.pop();
+  } else {
+    parts.pop();
+  }
+  return parts.slice(-SLOT_TERMINAL_STREAM_RECONCILE_COMPARE_LINES);
+}
+
+function normalizeTerminalText(data: string): string {
+  return stripAnsi(data).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function stripAnsi(value: string): string {
+  return value.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g, "");
 }
 
 async function applySlotTerminalInput(input: {
