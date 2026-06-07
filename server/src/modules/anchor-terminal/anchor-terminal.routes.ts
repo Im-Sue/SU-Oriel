@@ -7,7 +7,7 @@ import { prisma } from "../../db/prisma.js";
 import { assertLocalRequest } from "../ai-cli/ai-cli.guard.js";
 import { AiCliError } from "../ai-cli/ai-cli.errors.js";
 import { AnchorTerminalManager, AnchorTerminalError } from "./terminal-manager.js";
-import { AnchorTerminalRecordingStore } from "./recording-store.js";
+import { AnchorTerminalRecordingStore, type AnchorTerminalRecordingMeta } from "./recording-store.js";
 import type {
   AnchorTerminalExitEvent,
   AnchorTerminalFrameEvent,
@@ -49,11 +49,17 @@ export async function registerAnchorTerminalRoutes(
 
   app.get("/api/anchor-terminal/panes", async (request, reply) => {
     const { anchorId } = request.query as { anchorId?: string };
+    const projectId = projectIdFromQuery(request.query);
     if (!anchorId) {
       reply.status(400);
       return { code: "BAD_REQUEST", message: "anchorId is required" };
     }
+    if (!projectId) {
+      reply.status(400);
+      return { code: "BAD_REQUEST", message: "projectId is required" };
+    }
     try {
+      await assertAnchorInProject(db, anchorId, projectId);
       return { items: await manager.listPanes(anchorId) };
     } catch (error) {
       return respondWithAnchorTerminalError(reply, error);
@@ -69,8 +75,9 @@ export async function registerAnchorTerminalRoutes(
     }
 
     const { anchorId, pane } = request.query as { anchorId?: string; pane?: string };
-    if (!anchorId || !pane) {
-      sendErrorAndClose(socket, "BAD_REQUEST", "anchorId and pane are required", 1008);
+    const projectId = projectIdFromQuery(request.query);
+    if (!anchorId || !pane || !projectId) {
+      sendErrorAndClose(socket, "BAD_REQUEST", "anchorId, pane, and projectId are required", 1008);
       return;
     }
 
@@ -87,10 +94,10 @@ export async function registerAnchorTerminalRoutes(
 
     void (async () => {
       try {
+        await assertAnchorInProject(db, anchorId, projectId);
         attached = await manager.attach({ anchorId, paneName: pane, clientId });
       } catch (error) {
-        const statusCode = error instanceof AnchorTerminalError ? 1011 : 1011;
-        sendErrorAndClose(socket, errorCode(error), errorMessage(error), statusCode);
+        sendErrorAndClose(socket, errorCode(error), errorMessage(error), wsCloseCode(error));
         return;
       }
 
@@ -228,15 +235,35 @@ export async function registerAnchorTerminalRoutes(
     socket.on("close", detach);
   });
 
-  app.get("/api/anchor-terminal/recordings", async (request) => {
+  app.get("/api/anchor-terminal/recordings", async (request, reply) => {
     const { anchorId } = request.query as { anchorId?: string };
-    return { items: recordingStore.list(anchorId ? { anchorId } : {}) };
+    const projectId = projectIdFromQuery(request.query);
+    if (!projectId) {
+      reply.status(400);
+      return { code: "BAD_REQUEST", message: "projectId is required" };
+    }
+    try {
+      if (anchorId) {
+        await assertAnchorInProject(db, anchorId, projectId);
+        return { items: recordingStore.list({ anchorId }) };
+      }
+      return { items: await filterRecordingsForProject(db, recordingStore.list(), projectId) };
+    } catch (error) {
+      return respondWithAnchorTerminalError(reply, error);
+    }
   });
 
   app.get("/api/anchor-terminal/recordings/:id/cast", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const projectId = projectIdFromQuery(request.query);
+    if (!projectId) {
+      reply.status(400);
+      return { code: "BAD_REQUEST", message: "projectId is required" };
+    }
     try {
-      return recordingStore.read(id);
+      const payload = recordingStore.read(id);
+      await assertAnchorInProject(db, payload.meta.anchorId, projectId);
+      return payload;
     } catch (error) {
       return respondWithAnchorTerminalError(reply, error);
     }
@@ -312,12 +339,84 @@ async function resolveAnchor(db: PrismaClient, anchorId: string) {
   if (!row || row.state === "destroyed") {
     return null;
   }
+  const projectId = await resolveAnchorProjectId(db, row);
+  if (!projectId) {
+    return null;
+  }
   return {
     anchorId: row.anchorId,
     anchorPath: row.anchorPath,
     taskId: row.subjectId,
     state: row.state
   };
+}
+
+async function assertAnchorInProject(db: PrismaClient, anchorId: string, projectId: string): Promise<void> {
+  const row = await db.anchorAllocation.findUnique({
+    where: {
+      anchorId
+    }
+  });
+  if (!row || row.state === "destroyed") {
+    throw new AnchorTerminalError("ANCHOR_NOT_FOUND", "anchor 已销毁或不存在", 404);
+  }
+
+  const actualProjectId = await resolveAnchorProjectId(db, row);
+  if (!actualProjectId) {
+    throw new AnchorTerminalError("ANCHOR_SCOPE_UNKNOWN", "anchor 项目归属不可确认", 404);
+  }
+  if (actualProjectId !== projectId) {
+    throw new AnchorTerminalError("ANCHOR_SCOPE_FORBIDDEN", "anchor 不属于当前项目", 403);
+  }
+}
+
+async function resolveAnchorProjectId(
+  db: PrismaClient,
+  row: { projectId: string | null; subjectType: string; subjectId: string }
+): Promise<string | null> {
+  if (row.projectId) {
+    return row.projectId;
+  }
+  if (row.subjectType === "requirement") {
+    const requirement = await db.requirement.findUnique({
+      where: { id: row.subjectId },
+      select: { projectId: true }
+    });
+    return requirement?.projectId ?? null;
+  }
+  if (row.subjectType === "subtask" || row.subjectType === "task") {
+    const task = await db.task.findUnique({
+      where: { id: row.subjectId },
+      select: { projectId: true }
+    });
+    return task?.projectId ?? null;
+  }
+  return null;
+}
+
+async function filterRecordingsForProject(
+  db: PrismaClient,
+  metas: AnchorTerminalRecordingMeta[],
+  projectId: string
+): Promise<AnchorTerminalRecordingMeta[]> {
+  const filtered: AnchorTerminalRecordingMeta[] = [];
+  for (const meta of metas) {
+    try {
+      await assertAnchorInProject(db, meta.anchorId, projectId);
+      filtered.push(meta);
+    } catch {
+      // Missing, orphaned, and cross-project recordings are not visible in a scoped list.
+    }
+  }
+  return filtered;
+}
+
+function projectIdFromQuery(query: unknown): string | null {
+  const value = query && typeof query === "object"
+    ? (query as { projectId?: unknown; project_id?: unknown }).projectId ??
+      (query as { projectId?: unknown; project_id?: unknown }).project_id
+    : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function respondWithAnchorTerminalError(reply: FastifyReply, error: unknown) {
@@ -397,6 +496,13 @@ function errorCode(error: unknown): string {
     return error.code;
   }
   return "INTERNAL";
+}
+
+function wsCloseCode(error: unknown): number {
+  if (error instanceof AnchorTerminalError || error instanceof AiCliError) {
+    return error.statusCode >= 400 && error.statusCode < 500 ? 1008 : 1011;
+  }
+  return 1011;
 }
 
 function errorMessage(error: unknown): string {

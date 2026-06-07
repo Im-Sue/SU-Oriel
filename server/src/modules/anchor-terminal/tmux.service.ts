@@ -2,10 +2,10 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
+import { resolveAnchorTmuxSession } from "./anchor-session-resolver.js";
 import type { AnchorTerminalPane, AnchorTerminalTmuxBackend } from "./types.js";
 
 const execFileAsync = promisify(execFile);
-const ANCHOR_SESSION_PREFIX = "ccb-su-ccb-task-";
 const SEND_KEYS_LITERAL_CHUNK_SIZE = 32 * 1024;
 
 export interface TmuxCommandResult {
@@ -246,19 +246,16 @@ export class TmuxAnchorTerminalService implements AnchorTerminalTmuxBackend {
   }
 
   private async resolveAnchorSession(anchorPath: string): Promise<string> {
-    const { stdout } = await this.execFileProcess(this.tmuxCommand, [
-      "-S",
-      buildAnchorTmuxSocketPath(anchorPath),
-      "list-sessions",
-      "-F",
-      "#{session_name}"
-    ]);
-    const sessions = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const anchorSession = sessions.find((session) => session.startsWith(ANCHOR_SESSION_PREFIX)) ?? sessions[0];
-    if (!anchorSession) {
-      throw new AnchorTerminalTmuxError("anchor tmux session not found");
+    try {
+      return await resolveAnchorTmuxSession({
+        tmuxCommand: this.tmuxCommand,
+        socketPath: buildAnchorTmuxSocketPath(anchorPath),
+        anchorPath,
+        execFileProcess: this.execFileProcess
+      });
+    } catch (error) {
+      throw new AnchorTerminalTmuxError(error instanceof Error ? error.message : "anchor tmux session not found");
     }
-    return anchorSession;
   }
 }
 

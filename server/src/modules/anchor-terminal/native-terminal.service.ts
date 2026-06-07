@@ -6,10 +6,10 @@ import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 
 import type { AnchorRegistryEntry } from "../anchor-broker/broker.service.js";
+import { resolveAnchorTmuxSession } from "./anchor-session-resolver.js";
 import { buildAnchorTmuxSocketPath } from "./tmux.service.js";
 
 const execFileAsync = promisify(execFile);
-const ANCHOR_SESSION_PREFIX = "ccb-su-ccb-task-";
 const SHELL_META_PATTERN = /[;&|<>`$()[\]{}\n\r]/;
 const DEFAULT_WSL_AUTOMOUNT_ROOT = "/mnt";
 
@@ -88,7 +88,7 @@ export class NativeAnchorTerminalService {
 
   async spawn(anchor: NativeTerminalAnchor): Promise<NativeAnchorTerminalSpawnResult> {
     const socketPath = buildAnchorTmuxSocketPath(anchor.anchorPath);
-    const sessionName = await this.resolveAnchorSession(socketPath);
+    const sessionName = await this.resolveAnchorSession(anchor.anchorPath, socketPath);
     const fallbackCommand = buildAttachCommand(socketPath, sessionName);
     const candidates = await this.buildCandidates({
       anchorPath: anchor.anchorPath,
@@ -145,20 +145,13 @@ export class NativeAnchorTerminalService {
     };
   }
 
-  private async resolveAnchorSession(socketPath: string): Promise<string> {
-    const { stdout } = await this.execFileProcess(this.tmuxCommand, [
-      "-S",
+  private async resolveAnchorSession(anchorPath: string, socketPath: string): Promise<string> {
+    return await resolveAnchorTmuxSession({
+      tmuxCommand: this.tmuxCommand,
       socketPath,
-      "list-sessions",
-      "-F",
-      "#{session_name}"
-    ]);
-    const sessions = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const anchorSession = sessions.find((session) => session.startsWith(ANCHOR_SESSION_PREFIX)) ?? sessions[0];
-    if (!anchorSession) {
-      throw new Error("anchor tmux session not found");
-    }
-    return anchorSession;
+      anchorPath,
+      execFileProcess: this.execFileProcess
+    });
   }
 
   private async buildCandidates(input: {

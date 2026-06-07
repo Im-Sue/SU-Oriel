@@ -348,8 +348,8 @@ test("POST /api/anchors/:anchorId/terminal/spawn rejects non-local requests", as
     spawn: vi.fn(async () => ({
       spawned: true,
       attempted: ["xterm"],
-      fallbackCommand: "tmux -S /tmp/tmux.sock attach -t ccb-su-ccb-task-task-1",
-      sessionName: "ccb-su-ccb-task-task-1",
+      fallbackCommand: "tmux -S /tmp/tmux.sock attach -t ccb-realtime_translator-task-task-1",
+      sessionName: "ccb-realtime_translator-task-task-1",
       socketPath: "/tmp/tmux.sock",
       anchorPath: "/tmp/anchor"
     }))
@@ -414,8 +414,8 @@ test("POST /api/anchors/:anchorId/terminal/spawn returns native terminal spawn r
     spawned: false,
     attempted: ["gnome-terminal", "konsole", "xterm"],
     reason: "no supported terminal emulator found",
-    fallbackCommand: "tmux -S /tmp/anchor/.ccb/ccbd/tmux.sock attach -t ccb-su-ccb-task-task-1",
-    sessionName: "ccb-su-ccb-task-task-1",
+    fallbackCommand: "tmux -S /tmp/anchor/.ccb/ccbd/tmux.sock attach -t ccb-realtime_translator-task-task-1",
+    sessionName: "ccb-realtime_translator-task-task-1",
     socketPath: "/tmp/anchor/.ccb/ccbd/tmux.sock",
     anchorPath: "/tmp/anchor"
   };

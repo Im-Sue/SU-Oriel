@@ -36,7 +36,7 @@ function pane(name = "ccb_claude", paneId = "%2"): AnchorTerminalPane {
     paneId,
     title: name,
     currentCommand: "python",
-    sessionName: "ccb-su-ccb-task-task-1-a1b2",
+    sessionName: "ccb-realtime_translator-task-task-1-a1b2",
     windowIndex: 0,
     paneIndex: 1,
     active: true,
@@ -86,7 +86,7 @@ describe("anchor-terminal manager", () => {
       openPipeOutput: async () => pipeSource,
       anchorResolver: async () => ({
         anchorId: "anchor_task_1",
-        anchorPath: "/repo/SU-CCB-task-1",
+        anchorPath: "/repo/realtime_translator-task-1",
         taskId: "task-1",
         state: "ready"
       }),
@@ -175,7 +175,7 @@ describe("anchor-terminal manager", () => {
       openPipeOutput: async () => pipeSource,
       anchorResolver: async () => ({
         anchorId: "anchor_task_1",
-        anchorPath: "/repo/SU-CCB-task-1",
+        anchorPath: "/repo/realtime_translator-task-1",
         taskId: "task-1",
         state: "ready"
       }),
@@ -253,7 +253,7 @@ describe("anchor-terminal manager", () => {
       },
       anchorResolver: async () => ({
         anchorId: "anchor_task_1",
-        anchorPath: "/repo/SU-CCB-task-1",
+        anchorPath: "/repo/realtime_translator-task-1",
         taskId: "task-1",
         state: "ready"
       }),
@@ -285,8 +285,8 @@ describe("anchor-terminal manager", () => {
 
     expect(resizeWindow).toHaveBeenCalledTimes(1);
     expect(resizeWindow).toHaveBeenLastCalledWith(
-      expect.objectContaining({ anchorPath: "/repo/SU-CCB-task-1" }),
-      "ccb-su-ccb-task-task-1-a1b2",
+      expect.objectContaining({ anchorPath: "/repo/realtime_translator-task-1" }),
+      "ccb-realtime_translator-task-task-1-a1b2",
       142,
       38
     );
@@ -305,7 +305,7 @@ describe("anchor-terminal manager", () => {
 
     expect(unzoomPane).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ name: "ccb_claude" }));
     expect(zoomPane).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ name: "ccb_codex" }));
-    expect(resizeWindow).toHaveBeenLastCalledWith(expect.anything(), "ccb-su-ccb-task-task-1-a1b2", 150, 42);
+    expect(resizeWindow).toHaveBeenLastCalledWith(expect.anything(), "ccb-realtime_translator-task-task-1-a1b2", 150, 42);
 
     manager.detach("anchor_task_1", "ccb_claude", "client-a");
     manager.detach("anchor_task_1", "ccb_codex", "client-b");
@@ -313,8 +313,8 @@ describe("anchor-terminal manager", () => {
     await Promise.resolve();
 
     expect(restoreLayout).toHaveBeenCalledWith(
-      expect.objectContaining({ anchorPath: "/repo/SU-CCB-task-1" }),
-      "ccb-su-ccb-task-task-1-a1b2",
+      expect.objectContaining({ anchorPath: "/repo/realtime_translator-task-1" }),
+      "ccb-realtime_translator-task-task-1-a1b2",
       "original-layout"
     );
   });
@@ -348,7 +348,7 @@ describe("anchor-terminal manager", () => {
       },
       anchorResolver: async () => ({
         anchorId: "anchor_task_1",
-        anchorPath: "/repo/SU-CCB-task-1",
+        anchorPath: "/repo/realtime_translator-task-1",
         taskId: "task-1",
         state: "ready"
       }),
@@ -416,7 +416,7 @@ describe("anchor-terminal manager", () => {
     });
 
     expect(sendKeysLiteral).toHaveBeenCalledWith(
-      expect.objectContaining({ anchorPath: "/repo/SU-CCB-task-1" }),
+      expect.objectContaining({ anchorPath: "/repo/realtime_translator-task-1" }),
       expect.objectContaining({ name: "ccb_claude" }),
       "\u0003"
     );

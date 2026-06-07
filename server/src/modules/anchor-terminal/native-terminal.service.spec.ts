@@ -17,7 +17,7 @@ describe("native anchor terminal spawn", () => {
       readProcVersion: vi.fn(async () => "Linux version generic"),
       execFileProcess: vi.fn(async (_command, args) => {
         if (args.includes("list-sessions")) {
-          return { stdout: "other\nccb-su-ccb-task-task-1-a1b2\n", stderr: "" };
+          return { stdout: "other\nccb-realtime_translator-task-task-1-a1b2\n", stderr: "" };
         }
         return { stdout: "", stderr: "" };
       }),
@@ -33,14 +33,14 @@ describe("native anchor terminal spawn", () => {
 
     const result = await service.spawn({
       anchorId: "anchor-1",
-      anchorPath: "/repo/SU-CCB-task-task-1",
+      anchorPath: "/repo/realtime_translator-task-task-1",
       projectId: "project-1",
-      socketPath: "/repo/SU-CCB-task-task-1/.ccb/ccbd/ccbd.sock"
+      socketPath: "/repo/realtime_translator-task-task-1/.ccb/ccbd/ccbd.sock"
     });
 
     expect(result.spawned).toBe(true);
-    expect(result.sessionName).toBe("ccb-su-ccb-task-task-1-a1b2");
-    expect(result.socketPath).toBe("/repo/SU-CCB-task-task-1/.ccb/ccbd/tmux.sock");
+    expect(result.sessionName).toBe("ccb-realtime_translator-task-task-1-a1b2");
+    expect(result.socketPath).toBe("/repo/realtime_translator-task-task-1/.ccb/ccbd/tmux.sock");
     expect(launches.map(([command]) => command)).toEqual(["gnome-terminal", "konsole", "xterm"]);
     expect(launches.at(-1)).toEqual([
       "xterm",
@@ -48,7 +48,7 @@ describe("native anchor terminal spawn", () => {
         "-e",
         "bash",
         "-lc",
-        "tmux -S /repo/SU-CCB-task-task-1/.ccb/ccbd/tmux.sock attach -t ccb-su-ccb-task-task-1-a1b2"
+        "tmux -S /repo/realtime_translator-task-task-1/.ccb/ccbd/tmux.sock attach -t ccb-realtime_translator-task-task-1-a1b2"
       ]
     ]);
     expect(child.unref).toHaveBeenCalled();
@@ -62,14 +62,14 @@ describe("native anchor terminal spawn", () => {
         ANCHOR_TERMINAL_COMMAND: "custom-terminal --socket {socket} --session {session} --cwd {anchorPath}"
       },
       readProcVersion: vi.fn(async () => "Linux version generic"),
-      execFileProcess: vi.fn(async () => ({ stdout: "ccb-su-ccb-task-task-2-b2\n", stderr: "" })),
+      execFileProcess: vi.fn(async () => ({ stdout: "ccb-realtime_translator-task-task-2-b2\n", stderr: "" })),
       probeExecutable: vi.fn(async (command) => command === "custom-terminal"),
       launchProcess
     });
 
     const result = await service.spawn({
       anchorId: "anchor-2",
-      anchorPath: "/repo/SU-CCB-task-task-2",
+      anchorPath: "/repo/realtime_translator-task-task-2",
       projectId: "project-1",
       socketPath: null
     });
@@ -77,11 +77,11 @@ describe("native anchor terminal spawn", () => {
     expect(result.spawned).toBe(true);
     expect(launchProcess).toHaveBeenCalledWith("custom-terminal", [
       "--socket",
-      "/repo/SU-CCB-task-task-2/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-task-2/.ccb/ccbd/tmux.sock",
       "--session",
-      "ccb-su-ccb-task-task-2-b2",
+      "ccb-realtime_translator-task-task-2-b2",
       "--cwd",
-      "/repo/SU-CCB-task-task-2"
+      "/repo/realtime_translator-task-task-2"
     ]);
   });
 
@@ -93,14 +93,14 @@ describe("native anchor terminal spawn", () => {
         ANCHOR_TERMINAL_COMMAND: "custom-terminal -- bash -lc tmux;touch /tmp/pwned"
       },
       readProcVersion: vi.fn(async () => "Linux version generic"),
-      execFileProcess: vi.fn(async () => ({ stdout: "ccb-su-ccb-task-task-3-c3\n", stderr: "" })),
+      execFileProcess: vi.fn(async () => ({ stdout: "ccb-realtime_translator-task-task-3-c3\n", stderr: "" })),
       probeExecutable: vi.fn(async () => false),
       launchProcess
     });
 
     const result = await service.spawn({
       anchorId: "anchor-3",
-      anchorPath: "/repo/SU-CCB-task-task-3",
+      anchorPath: "/repo/realtime_translator-task-task-3",
       projectId: "project-1",
       socketPath: null
     });
@@ -115,7 +115,7 @@ describe("native anchor terminal spawn", () => {
     const launchProcess = vi.fn(() => child);
     const execFileProcess = vi.fn(async (command: string, args: string[]) => {
       if (args.includes("list-sessions")) {
-        return { stdout: "ccb-su-ccb-task-task-4-d4\n", stderr: "" };
+        return { stdout: "ccb-realtime_translator-task-task-4-d4\n", stderr: "" };
       }
       if (command === "/windows/c/Windows/System32/cmd.exe" && args.join(" ") === "/c where wt.exe") {
         return { stdout: "C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe\n", stderr: "" };
@@ -138,7 +138,7 @@ describe("native anchor terminal spawn", () => {
 
     const result = await service.spawn({
       anchorId: "anchor-4",
-      anchorPath: "/repo/SU-CCB-task-task-4",
+      anchorPath: "/repo/realtime_translator-task-task-4",
       projectId: "project-1",
       socketPath: null
     });
@@ -153,7 +153,7 @@ describe("native anchor terminal spawn", () => {
       "--",
       "bash",
       "-lc",
-      "tmux -S /repo/SU-CCB-task-task-4/.ccb/ccbd/tmux.sock attach -t ccb-su-ccb-task-task-4-d4"
+      "tmux -S /repo/realtime_translator-task-task-4/.ccb/ccbd/tmux.sock attach -t ccb-realtime_translator-task-task-4-d4"
     ]);
   });
 
@@ -161,7 +161,7 @@ describe("native anchor terminal spawn", () => {
     const launchProcess = vi.fn(() => child);
     const execFileProcess = vi.fn(async (command: string, args: string[]) => {
       if (args.includes("list-sessions")) {
-        return { stdout: "ccb-su-ccb-task-task-5-e5\n", stderr: "" };
+        return { stdout: "ccb-realtime_translator-task-task-5-e5\n", stderr: "" };
       }
       if (command === "/mnt/c/Windows/System32/cmd.exe" && args.join(" ") === "/c where wt.exe") {
         throw new Error("wt not found");
@@ -183,7 +183,7 @@ describe("native anchor terminal spawn", () => {
 
     const result = await service.spawn({
       anchorId: "anchor-5",
-      anchorPath: "/repo/SU-CCB-task-task-5",
+      anchorPath: "/repo/realtime_translator-task-task-5",
       projectId: "project-1",
       socketPath: null
     });
@@ -199,7 +199,7 @@ describe("native anchor terminal spawn", () => {
       "--",
       "bash",
       "-lc",
-      "tmux -S /repo/SU-CCB-task-task-5/.ccb/ccbd/tmux.sock attach -t ccb-su-ccb-task-task-5-e5"
+      "tmux -S /repo/realtime_translator-task-task-5/.ccb/ccbd/tmux.sock attach -t ccb-realtime_translator-task-task-5-e5"
     ]);
   });
 
@@ -214,7 +214,7 @@ describe("native anchor terminal spawn", () => {
       }),
       execFileProcess: vi.fn(async (_command, args) => {
         if (args.includes("list-sessions")) {
-          return { stdout: "ccb-su-ccb-task-task-6-f6\n", stderr: "" };
+          return { stdout: "ccb-realtime_translator-task-task-6-f6\n", stderr: "" };
         }
         throw new Error("wt not found");
       }),
@@ -227,7 +227,7 @@ describe("native anchor terminal spawn", () => {
 
     const result = await service.spawn({
       anchorId: "anchor-6",
-      anchorPath: "/repo/SU-CCB-task-task-6",
+      anchorPath: "/repo/realtime_translator-task-task-6",
       projectId: "project-1",
       socketPath: null
     });
@@ -246,7 +246,7 @@ describe("native anchor terminal spawn", () => {
     await writeFile(exePath, "", "utf8");
     await writeFile(scriptPath, "", "utf8");
     try {
-      const execFileProcess = vi.fn(async () => ({ stdout: "ccb-su-ccb-task-task-7-g7\n", stderr: "" }));
+      const execFileProcess = vi.fn(async () => ({ stdout: "ccb-realtime_translator-task-task-7-g7\n", stderr: "" }));
       const exeLaunchProcess = vi.fn(() => child);
       const exeService = new NativeAnchorTerminalService({
         platform: "linux",
@@ -259,7 +259,7 @@ describe("native anchor terminal spawn", () => {
       });
       const exeResult = await exeService.spawn({
         anchorId: "anchor-7",
-        anchorPath: "/repo/SU-CCB-task-task-7",
+        anchorPath: "/repo/realtime_translator-task-task-7",
         projectId: "project-1",
         socketPath: null
       });
@@ -276,7 +276,7 @@ describe("native anchor terminal spawn", () => {
       });
       const scriptResult = await scriptService.spawn({
         anchorId: "anchor-8",
-        anchorPath: "/repo/SU-CCB-task-task-8",
+        anchorPath: "/repo/realtime_translator-task-task-8",
         projectId: "project-1",
         socketPath: null
       });
@@ -298,13 +298,13 @@ describe("native anchor terminal spawn", () => {
         ANCHOR_TERMINAL_COMMAND: "ccb-missing-terminal-command"
       },
       readProcVersion: vi.fn(async () => "Linux version generic"),
-      execFileProcess: vi.fn(async () => ({ stdout: "ccb-su-ccb-task-task-9-h9\n", stderr: "" })),
+      execFileProcess: vi.fn(async () => ({ stdout: "ccb-realtime_translator-task-task-9-h9\n", stderr: "" })),
       launchProcess
     });
 
     const result = await service.spawn({
       anchorId: "anchor-9",
-      anchorPath: "/repo/SU-CCB-task-task-9",
+      anchorPath: "/repo/realtime_translator-task-task-9",
       projectId: "project-1",
       socketPath: null
     });
@@ -322,14 +322,14 @@ describe("native anchor terminal spawn", () => {
         ANCHOR_TERMINAL_COMMAND: "custom-terminal --socket {socket}"
       },
       readProcVersion: vi.fn(async () => "Linux version generic"),
-      execFileProcess: vi.fn(async () => ({ stdout: "ccb-su-ccb-task-task-10-i10\n", stderr: "" })),
+      execFileProcess: vi.fn(async () => ({ stdout: "ccb-realtime_translator-task-task-10-i10\n", stderr: "" })),
       probeExecutable: vi.fn(async () => false),
       launchProcess
     });
 
     const result = await service.spawn({
       anchorId: "anchor-10",
-      anchorPath: "/repo/SU-CCB-task-task-10;touch-pwned",
+      anchorPath: "/repo/realtime_translator-task-task-10;touch-pwned",
       projectId: "project-1",
       socketPath: null
     });

@@ -6,7 +6,7 @@ describe("anchor-terminal tmux discovery", () => {
   it("lists panes from the anchor tmux socket and resolves ccb panes by title", async () => {
     const execFile = vi.fn(async (command: string, args: string[]) => {
       if (args.includes("list-sessions")) {
-        return { stdout: "ccb-su-ccb-task-task-1-a1b2\nother-session\n", stderr: "" };
+        return { stdout: "ccb-realtime_translator-task-task-1-a1b2\nother-session\n", stderr: "" };
       }
       if (args.includes("list-panes")) {
         return {
@@ -25,15 +25,15 @@ describe("anchor-terminal tmux discovery", () => {
     });
     const service = new TmuxAnchorTerminalService({ execFileProcess: execFile });
 
-    const panes = await service.listPanes({ anchorPath: "/repo/SU-CCB-task-1" });
-    const capture = await service.capturePane({ anchorPath: "/repo/SU-CCB-task-1" }, panes[1]);
+    const panes = await service.listPanes({ anchorPath: "/repo/realtime_translator-task-1" });
+    const capture = await service.capturePane({ anchorPath: "/repo/realtime_translator-task-1" }, panes[1]);
 
     expect(panes.map((pane) => pane.name)).toEqual(["__ccb_ctl", "ccb_claude", "ccb_codex"]);
-    expect(panes[1]).toMatchObject({ paneId: "%2", sessionName: "ccb-su-ccb-task-task-1-a1b2" });
+    expect(panes[1]).toMatchObject({ paneId: "%2", sessionName: "ccb-realtime_translator-task-task-1-a1b2" });
     expect(capture).toBe("\u001b[32mhello\u001b[0m\n");
     expect(execFile).toHaveBeenCalledWith(
       "tmux",
-      ["-S", "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock", "list-sessions", "-F", "#{session_name}"]
+      ["-S", "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock", "list-sessions", "-F", "#{session_name}"]
     );
     expect(execFile).toHaveBeenCalledWith(
       "tmux",
@@ -49,13 +49,13 @@ describe("anchor-terminal tmux discovery", () => {
       return { stdout: "", stderr: "" };
     });
     const service = new TmuxAnchorTerminalService({ execFileProcess: execFile });
-    const anchor = { anchorPath: "/repo/SU-CCB-task-1" };
+    const anchor = { anchorPath: "/repo/realtime_translator-task-1" };
     const pane = {
       name: "ccb_claude",
       paneId: "%2",
       title: "ccb_claude",
       currentCommand: "python",
-      sessionName: "ccb-su-ccb-task-task-1-a1b2",
+      sessionName: "ccb-realtime_translator-task-task-1-a1b2",
       windowIndex: 0,
       paneIndex: 1,
       active: true,
@@ -71,19 +71,19 @@ describe("anchor-terminal tmux discovery", () => {
 
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "display-message",
       "-p",
       "-t",
-      "ccb-su-ccb-task-task-1-a1b2",
+      "ccb-realtime_translator-task-task-1-a1b2",
       "#{window_layout}"
     ]);
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "resize-window",
       "-t",
-      "ccb-su-ccb-task-task-1-a1b2",
+      "ccb-realtime_translator-task-task-1-a1b2",
       "-x",
       "142",
       "-y",
@@ -91,7 +91,7 @@ describe("anchor-terminal tmux discovery", () => {
     ]);
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "resize-pane",
       "-Z",
       "-t",
@@ -99,10 +99,10 @@ describe("anchor-terminal tmux discovery", () => {
     ]);
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "select-layout",
       "-t",
-      "ccb-su-ccb-task-task-1-a1b2",
+      "ccb-realtime_translator-task-task-1-a1b2",
       "original-layout"
     ]);
   });
@@ -118,13 +118,13 @@ describe("anchor-terminal tmux discovery", () => {
       return { stdout: "", stderr: "" };
     });
     const service = new TmuxAnchorTerminalService({ execFileProcess: execFile });
-    const anchor = { anchorPath: "/repo/SU-CCB-task-1" };
+    const anchor = { anchorPath: "/repo/realtime_translator-task-1" };
     const pane = {
       name: "ccb_claude",
       paneId: "%2",
       title: "ccb_claude",
       currentCommand: "python",
-      sessionName: "ccb-su-ccb-task-task-1-a1b2",
+      sessionName: "ccb-realtime_translator-task-task-1-a1b2",
       windowIndex: 0,
       paneIndex: 1,
       active: true,
@@ -140,7 +140,7 @@ describe("anchor-terminal tmux discovery", () => {
 
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "display-message",
       "-p",
       "-t",
@@ -149,7 +149,7 @@ describe("anchor-terminal tmux discovery", () => {
     ]);
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "capture-pane",
       "-p",
       "-e",
@@ -164,13 +164,13 @@ describe("anchor-terminal tmux discovery", () => {
   it("sends literal keystrokes through tmux send-keys and chunks large paste data", async () => {
     const execFile = vi.fn<ExecFileProcess>(async () => ({ stdout: "", stderr: "" }));
     const service = new TmuxAnchorTerminalService({ execFileProcess: execFile });
-    const anchor = { anchorPath: "/repo/SU-CCB-task-1" };
+    const anchor = { anchorPath: "/repo/realtime_translator-task-1" };
     const pane = {
       name: "ccb_claude",
       paneId: "%2",
       title: "ccb_claude",
       currentCommand: "python",
-      sessionName: "ccb-su-ccb-task-task-1-a1b2",
+      sessionName: "ccb-realtime_translator-task-task-1-a1b2",
       windowIndex: 0,
       paneIndex: 1,
       active: true,
@@ -183,7 +183,7 @@ describe("anchor-terminal tmux discovery", () => {
 
     expect(execFile).toHaveBeenCalledWith("tmux", [
       "-S",
-      "/repo/SU-CCB-task-1/.ccb/ccbd/tmux.sock",
+      "/repo/realtime_translator-task-1/.ccb/ccbd/tmux.sock",
       "send-keys",
       "-t",
       "%2",
