@@ -294,6 +294,27 @@ test("main agent completed item is removed after ack and does not revive", async
   });
   assert.equal(afterAck.some((item) => item.ref === completedRef), false);
   assert.equal((await source.collect(baseInput(root, NOW, []))).some((item) => item.ref === completedRef), false);
+
+  await writeActivity(root, "main_codex", "codex", {
+    state: "active",
+    event_name: "PreToolUse",
+    updated_at: "2026-06-06T12:01:00.000Z",
+    provider_session_id: "main-ack",
+    diagnostics: { tool_name: "Bash" }
+  });
+  await source.collect(baseInput(root, new Date("2026-06-06T12:01:00.000Z"), []));
+  await writeActivity(root, "main_codex", "codex", {
+    state: "idle",
+    event_name: "Stop",
+    updated_at: "2026-06-06T12:02:10.000Z",
+    provider_session_id: "main-ack",
+    diagnostics: {}
+  });
+  const recompleted = await source.collect(baseInput(root, new Date("2026-06-06T12:02:10.000Z"), []));
+  const recompletedRef = recompleted.find((item) => item.kind === "agent_completed")?.ref;
+  assert.ok(recompletedRef);
+  assert.notEqual(recompletedRef, completedRef);
+  assert.match(recompletedRef, /2026-06-06T12:02:10\.000Z$/);
 });
 
 test("input debounce entries expire after TTL since last access", async () => {
