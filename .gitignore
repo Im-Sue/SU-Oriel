@@ -24,6 +24,10 @@ server/prisma/test.db
 server/prisma/test.db-journal
 server/prisma/test.db-shm
 server/prisma/test.db-wal
+server/prisma/e2e.db
+server/prisma/e2e.db-journal
+server/prisma/e2e.db-shm
+server/prisma/e2e.db-wal
 server/prisma/prisma/dev.db
 server/prisma/migrations/dev/
 server/scripts/migrate-task-hierarchy-dryrun-*.csv
@@ -33,6 +37,8 @@ web/dist/
 web/.vite/
 web/.test-dist/
 **/.test-dist/
+test-results/
+playwright-report/
 
 # ===== Python =====
 __pycache__/

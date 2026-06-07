@@ -8,10 +8,13 @@
     "dev:server": "pnpm --filter su-oriel-server dev",
     "build": "pnpm --filter su-oriel-web build && pnpm --filter su-oriel-server build",
     "test": "pnpm --filter su-oriel-web test && pnpm --filter su-oriel-server test",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "lint:schema-ownership": "pnpm --filter su-oriel-server lint:schema-ownership",
     "prepare": "husky install || true"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "husky": "^8.0.3",
     "lint-staged": "^16.2.7"
   },
