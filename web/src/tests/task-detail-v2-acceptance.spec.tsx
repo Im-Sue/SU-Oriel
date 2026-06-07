@@ -316,7 +316,8 @@ function mockConsoleApi(): void {
   vi.mocked(consoleApi.fetchSyncJobs).mockResolvedValue([] satisfies SyncJobView[]);
   vi.mocked(consoleApi.fetchProjectIndexHealth).mockResolvedValue(indexHealth);
   vi.mocked(consoleApi.fetchSlots).mockResolvedValue({
-    project: { id: "project-1", name: "PR12 Fixture" },
+    project: { id: "project-1", name: "PR12 Fixture", slotCount: 3 },
+    slotCount: 3,
     main: { slotId: "main", lane: "coordination", state: "available", canBindBusiness: false },
     slots: [
       {
@@ -332,6 +333,20 @@ function mockConsoleApi(): void {
       }
     ],
     queue: [],
+    shrinkEligibility: {
+      projectId: "project-1",
+      slotCount: 3,
+      tailSlotId: "slot-3",
+      canShrink: true,
+      eligible: false,
+      checks: {
+        slotBindingIdle: false,
+        queueClear: true,
+        runtimeIdle: true
+      },
+      reasons: ["slot_not_idle"],
+      details: {}
+    },
     generatedAt: "2026-05-24T00:02:00.000Z"
   });
   vi.mocked(consoleApi.fetchTaskDetail).mockResolvedValue(detail);

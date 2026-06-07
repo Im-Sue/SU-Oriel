@@ -26,7 +26,8 @@ import { useProjectStore } from "../../stores/project-store.js";
 import { useUIStore } from "../../stores/ui-store.js";
 
 const slotProjection: SlotProjectionView = {
-  project: { id: "project-1", name: "SU-CCB" },
+  project: { id: "project-1", name: "SU-CCB", slotCount: 3 },
+  slotCount: 3,
   main: { slotId: "main", lane: "coordination", state: "available", canBindBusiness: false },
   slots: [
     {
@@ -64,6 +65,20 @@ const slotProjection: SlotProjectionView = {
     }
   ],
   queue: [],
+  shrinkEligibility: {
+    projectId: "project-1",
+    slotCount: 3,
+    tailSlotId: "slot-3",
+    canShrink: true,
+    eligible: false,
+    checks: {
+      slotBindingIdle: false,
+      queueClear: true,
+      runtimeIdle: true
+    },
+    reasons: ["slot_not_idle"],
+    details: {}
+  },
   generatedAt: "2026-05-24T00:02:00.000Z"
 };
 

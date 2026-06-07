@@ -532,10 +532,25 @@ function mockConsoleApi(): void {
   vi.mocked(consoleApi.updateTask).mockResolvedValue(tasks[2]);
   vi.mocked(consoleApi.fetchRequirements).mockResolvedValue(requirements);
   vi.mocked(consoleApi.fetchSlots).mockResolvedValue({
-    project: { id: projectId, name: project.name },
+    project: { id: projectId, name: project.name, slotCount: 3 },
+    slotCount: 3,
     main: { slotId: "main", lane: "coordination", state: "available", canBindBusiness: false },
     slots: [],
     queue: [],
+    shrinkEligibility: {
+      projectId,
+      slotCount: 3,
+      tailSlotId: "slot-3",
+      canShrink: true,
+      eligible: true,
+      checks: {
+        slotBindingIdle: true,
+        queueClear: true,
+        runtimeIdle: true
+      },
+      reasons: [],
+      details: {}
+    },
     generatedAt: "2026-05-24T00:02:00.000Z"
   });
   vi.mocked(consoleApi.fetchSyncJobs).mockResolvedValue(syncJobs);

@@ -134,7 +134,8 @@ export class ConsoleApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: string,
-    public readonly retryAfter?: string
+    public readonly retryAfter?: string,
+    public readonly payload?: unknown
   ) {
     super(message);
   }
@@ -157,13 +158,13 @@ async function parseApiError(response: Response, fallbackMessage: string): Promi
 
   if (contentType.includes("application/json")) {
     try {
-      const payload = (await response.json()) as ApiMessageResponse;
+      const payload = (await response.json()) as ApiMessageResponse & Record<string, unknown>;
       if (payload.message?.trim()) {
         message = payload.message;
       }
       code = payload.code;
       retryAfter = payload.retryAfter ?? retryAfter;
-      return new ConsoleApiError(message, response.status, code, retryAfter);
+      return new ConsoleApiError(message, response.status, code, retryAfter, payload);
     } catch {
       // 忽略非标准错误响应，继续回退到文本或默认文案。
     }
@@ -456,11 +457,28 @@ export interface SlotLaneView {
   queued: SlotQueueItemView[];
 }
 
+export interface SlotShrinkEligibilitySummary {
+  projectId: string;
+  slotCount: number;
+  tailSlotId: string | null;
+  canShrink: boolean;
+  eligible: boolean;
+  checks: {
+    slotBindingIdle: boolean;
+    queueClear: boolean;
+    runtimeIdle: boolean;
+  };
+  reasons: string[];
+  details: Record<string, unknown>;
+}
+
 export interface SlotProjectionView {
   project: {
     id: string;
     name: string;
+    slotCount: number;
   };
+  slotCount: number;
   main: {
     slotId: "main";
     lane: "coordination";
@@ -469,7 +487,91 @@ export interface SlotProjectionView {
   };
   slots: SlotLaneView[];
   queue: SlotQueueItemView[];
+  shrinkEligibility: SlotShrinkEligibilitySummary;
   generatedAt?: string;
+}
+
+export type SlotResizeDirection = "grow" | "shrink";
+export type SlotResizeMode = "reloaded" | "offline_desired";
+
+export interface CcbReloadOperation {
+  raw: string;
+  op: string | null;
+  window?: string;
+  agent?: string;
+  agents?: string[];
+  reason?: string;
+  fields: Record<string, string>;
+}
+
+export interface CcbReloadResult {
+  ok: boolean;
+  status: string | null;
+  dryRun: boolean | null;
+  mutationEnabled: boolean | null;
+  planClass: string | null;
+  safeToApply: boolean | null;
+  futureSafeToApply: boolean | null;
+  operations: CcbReloadOperation[];
+  blocked: string[];
+  reasons: string[];
+  diagnostics: string[];
+  rawStdout: string;
+  rawStderr: string;
+  exitCode: number | null;
+  errorMessage: string | null;
+}
+
+export interface SlotContextResetResult {
+  projectId: string;
+  slotId: string;
+  trigger: string;
+  command: string;
+  agentNames: string[];
+  results: Array<{
+    agent: string;
+    status: "sent" | "skipped" | "failed";
+    paneId?: string | null;
+    reason?: string;
+  }>;
+  sent: number;
+  skipped: number;
+  failed: number;
+  status: "ok" | "partial" | "skipped" | "failed";
+}
+
+export interface SlotResizeSuccess {
+  ok: true;
+  direction: SlotResizeDirection;
+  mode: SlotResizeMode;
+  projectId: string;
+  previousSlotCount: number;
+  nextSlotCount: number;
+  reload: CcbReloadResult | null;
+  reset: SlotContextResetResult | null;
+}
+
+export interface SlotResizeFailure {
+  ok: false;
+  direction: SlotResizeDirection;
+  projectId: string;
+  previousSlotCount: number | null;
+  reason: string;
+  details?: Record<string, unknown>;
+  reload?: CcbReloadResult | null;
+}
+
+export type SlotResizeResult = SlotResizeSuccess | SlotResizeFailure;
+
+export interface SlotResizeResponse extends SlotProjectionView {
+  resize: SlotResizeSuccess;
+}
+
+export interface SlotResizeLockTimeoutResponse {
+  code: "SLOT_RESIZE_LOCK_TIMEOUT";
+  message: string;
+  projectId: string;
+  timeoutMs: number;
 }
 
 export interface SlotReleaseInput {
@@ -534,6 +636,23 @@ export async function fetchSlots(projectId: string): Promise<SlotProjectionView>
   return await requestJson<SlotProjectionView>(
     `/api/projects/${encodeURIComponent(projectId)}/slots`,
     "加载 Slot 拓扑失败"
+  );
+}
+
+export async function resizeSlots(
+  projectId: string,
+  input: { direction: SlotResizeDirection }
+): Promise<SlotResizeResponse> {
+  return await requestJson<SlotResizeResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/slots/resize`,
+    "调整 Slot 数量失败",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(input)
+    }
   );
 }
 

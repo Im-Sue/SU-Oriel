@@ -19,10 +19,12 @@ import {
   fetchProjects,
   initProjectKnowledgeBase,
   reindexRequirement,
+  resizeSlots,
   scanProject,
   startRequirementPlanningAnchor,
   updateAttentionSettings,
-  uploadRequirementAsset
+  uploadRequirementAsset,
+  type ConsoleApiError
 } from "../lib/console-api.js";
 
 describe("console-api 真实联调行为", () => {
@@ -409,5 +411,71 @@ describe("console-api 真实联调行为", () => {
     await fetchProjectInitJobStatus("project-1", "job 1");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-1/init-job-status?jobId=job%201");
+  });
+
+  it("slot resize client posts direction and preserves structured lock timeout payload", async () => {
+    const successPayload = {
+      project: { id: "project-1", name: "SU-CCB", slotCount: 4 },
+      slotCount: 4,
+      main: { slotId: "main", lane: "coordination", state: "available", canBindBusiness: false },
+      slots: [],
+      queue: [],
+      shrinkEligibility: {
+        projectId: "project-1",
+        slotCount: 4,
+        tailSlotId: "slot-4",
+        canShrink: true,
+        eligible: true,
+        checks: {
+          slotBindingIdle: true,
+          queueClear: true,
+          runtimeIdle: true
+        },
+        reasons: [],
+        details: {}
+      },
+      resize: {
+        ok: true,
+        direction: "grow",
+        mode: "reloaded",
+        projectId: "project-1",
+        previousSlotCount: 3,
+        nextSlotCount: 4,
+        reload: null,
+        reset: null
+      }
+    };
+    const lockTimeoutPayload = {
+      code: "SLOT_RESIZE_LOCK_TIMEOUT",
+      message: "slot resize lock wait timed out after 2000ms",
+      projectId: "project-1",
+      timeoutMs: 2000
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(successPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(lockTimeoutPayload), {
+        status: 409,
+        headers: { "Content-Type": "application/json" }
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await resizeSlots("project-1", { direction: "grow" });
+
+    expect(result.resize.nextSlotCount).toBe(4);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/projects/project-1/slots/resize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ direction: "grow" })
+    });
+    await expect(resizeSlots("project-1", { direction: "shrink" })).rejects.toMatchObject({
+      status: 409,
+      code: "SLOT_RESIZE_LOCK_TIMEOUT",
+      payload: lockTimeoutPayload
+    } satisfies Partial<ConsoleApiError>);
   });
 });

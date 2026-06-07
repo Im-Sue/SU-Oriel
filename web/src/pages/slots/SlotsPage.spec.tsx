@@ -43,7 +43,8 @@ function slot(slotId: string, overrides: Partial<SlotLaneView> = {}): SlotLaneVi
 }
 
 const projection: SlotProjectionView = {
-  project: { id: "project-1", name: "SU-CCB" },
+  project: { id: "project-1", name: "SU-CCB", slotCount: 3 },
+  slotCount: 3,
   main: { slotId: "main", lane: "coordination", state: "available", canBindBusiness: false },
   slots: [
     slot("slot-1", {
@@ -76,6 +77,20 @@ const projection: SlotProjectionView = {
       queuedAt: "2026-05-22T00:00:00.000Z"
     }
   ],
+  shrinkEligibility: {
+    projectId: "project-1",
+    slotCount: 3,
+    tailSlotId: "slot-3",
+    canShrink: true,
+    eligible: false,
+    checks: {
+      slotBindingIdle: false,
+      queueClear: true,
+      runtimeIdle: true
+    },
+    reasons: ["slot_not_idle"],
+    details: {}
+  },
   generatedAt: "2026-05-22T00:00:00.000Z"
 };
 

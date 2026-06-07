@@ -25,24 +25,63 @@ def _resolve_project_root() -> Path:
 
 REPO_ROOT = _resolve_project_root()
 CONFIG_PATH = REPO_ROOT / ".ccb" / "ccb.config"
-EXPECTED_DEFAULT_AGENTS = ["ccb_claude", "ccb_codex"]
-EXPECTED_LAYOUT = "cmd, (ccb_claude:claude; ccb_codex:codex)"
-EXPECTED_WINDOWS = {
-    "main": "main_claude:claude; main_codex:codex",
-    "slot-1": "slot1_claude:claude; slot1_codex:codex",
-    "slot-2": "slot2_claude:claude; slot2_codex:codex",
-    "slot-3": "slot3_claude:claude; slot3_codex:codex",
-}
-EXPECTED_AGENTS = {
+MIN_SLOT_COUNT = 1
+MAX_SLOT_COUNT = 16
+EXPECTED_MAIN_WINDOW = "main_claude:claude; main_codex:codex"
+EXPECTED_MAIN_AGENTS = {
     "main_claude": "claude",
     "main_codex": "codex",
-    "slot1_claude": "claude",
-    "slot1_codex": "codex",
-    "slot2_claude": "claude",
-    "slot2_codex": "codex",
-    "slot3_claude": "claude",
-    "slot3_codex": "codex",
 }
+
+
+def _expected_windows(slot_count: int) -> dict[str, str]:
+    return {
+        "main": EXPECTED_MAIN_WINDOW,
+        **{
+            f"slot-{index}": f"slot{index}_claude:claude; slot{index}_codex:codex"
+            for index in range(1, slot_count + 1)
+        },
+    }
+
+
+def _expected_agents(slot_count: int) -> dict[str, str]:
+    agents = dict(EXPECTED_MAIN_AGENTS)
+    for index in range(1, slot_count + 1):
+        agents[f"slot{index}_claude"] = "claude"
+        agents[f"slot{index}_codex"] = "codex"
+    return agents
+
+
+def _infer_slot_count(windows: object) -> tuple[int | None, str | None]:
+    if not isinstance(windows, dict):
+        return None, "[windows] table is required"
+    if windows.get("main") != EXPECTED_MAIN_WINDOW:
+        return None, f"[windows].main must be {EXPECTED_MAIN_WINDOW!r}"
+
+    slot_indexes: list[int] = []
+    for name in windows:
+        if name == "main":
+            continue
+        if not name.startswith("slot-"):
+            return None, f"[windows] contains unmanaged window {name!r}"
+        suffix = name.removeprefix("slot-")
+        if not suffix.isdigit():
+            return None, f"[windows] contains invalid slot window {name!r}"
+        slot_indexes.append(int(suffix))
+
+    if not slot_indexes:
+        return None, "[windows] must contain at least one business slot"
+    slot_count = max(slot_indexes)
+    if slot_count < MIN_SLOT_COUNT or slot_count > MAX_SLOT_COUNT:
+        return None, f"slot count must be between {MIN_SLOT_COUNT} and {MAX_SLOT_COUNT}"
+    expected_indexes = list(range(1, slot_count + 1))
+    if sorted(slot_indexes) != expected_indexes:
+        return None, f"[windows] slot windows must be contiguous slot-1..slot-{slot_count}"
+
+    expected = _expected_windows(slot_count)
+    if windows != expected:
+        return None, f"[windows] must be main plus contiguous slot-1..slot-{slot_count}: {expected}"
+    return slot_count, None
 
 
 def fail(message: str) -> int:
@@ -69,18 +108,20 @@ def main() -> int:
         return fail("version must be 2")
     if config.get("entry_window") != "main":
         return fail("entry_window must be main")
-    windows = config.get("windows")
-    if windows != EXPECTED_WINDOWS:
-        return fail(f"[windows] must be main plus slot-1..slot-3: {EXPECTED_WINDOWS}")
+    slot_count, windows_error = _infer_slot_count(config.get("windows"))
+    if windows_error:
+        return fail(windows_error)
+    assert slot_count is not None
+    expected_agents = _expected_agents(slot_count)
 
     agents = config.get("agents")
     if not isinstance(agents, dict):
         return fail("[agents] table is required")
     agent_names = set(agents)
-    if agent_names != set(EXPECTED_AGENTS):
-        return fail(f"managed agents must be exactly {sorted(EXPECTED_AGENTS)}")
+    if agent_names != set(expected_agents):
+        return fail(f"managed agents must be exactly {sorted(expected_agents)}")
 
-    for agent_name, provider in EXPECTED_AGENTS.items():
+    for agent_name, provider in expected_agents.items():
         agent = agents.get(agent_name)
         if not isinstance(agent, dict):
             return fail(f"agent {agent_name} must be a table")

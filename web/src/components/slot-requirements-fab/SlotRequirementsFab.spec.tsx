@@ -30,10 +30,25 @@ function lane(overrides: Partial<SlotLaneView> & Pick<SlotLaneView, "slotId" | "
 
 function projection(slots: SlotLaneView[]): SlotProjectionView {
   return {
-    project: { id: "p1", name: "P1" },
+    project: { id: "p1", name: "P1", slotCount: 3 },
+    slotCount: 3,
     main: { slotId: "main", lane: "coordination", state: "idle", canBindBusiness: false },
     slots,
-    queue: []
+    queue: [],
+    shrinkEligibility: {
+      projectId: "p1",
+      slotCount: 3,
+      tailSlotId: "slot-3",
+      canShrink: true,
+      eligible: true,
+      checks: {
+        slotBindingIdle: true,
+        queueClear: true,
+        runtimeIdle: true
+      },
+      reasons: [],
+      details: {}
+    }
   };
 }
 
