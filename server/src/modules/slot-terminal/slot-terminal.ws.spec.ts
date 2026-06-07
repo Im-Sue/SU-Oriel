@@ -939,6 +939,86 @@ describe("slot-terminal websocket", () => {
     }
   });
 
+  it("re-runs the stream seam when an initial snapshot fallback upgrades to stream mode", async () => {
+    const fixture = createRouteFixture();
+    const streamRecorder = new FakeSlotTerminalStreamRecorder();
+    streamRecorder.modeOnSubscribe = {
+      mode: "snapshot-fallback",
+      reason: "pane-pipe-occupied",
+      message: "tmux pane pipe is already occupied"
+    };
+    const capture = buildCapture(
+      { "%7": ["fallback snapshot\n", "upgrade reset snapshot\n"] },
+      { "%7": [{ cols: 80, rows: 24 }, { cols: 80, rows: 24 }] }
+    );
+    const app = buildSlotTerminalWebSocketApp({
+      store: fixture.store,
+      service: fixture.service,
+      capture,
+      streamRecorder,
+      activeIntervalMs: 10_000
+    });
+
+    try {
+      await app.ready();
+      const { socket, messages } = await collectInjectedMessages(
+        app,
+        `/api/slot-terminal/ws?projectId=${fixture.projectId}&requirementId=${fixture.requirementId}&pane=claude`,
+        2
+      );
+      const subscription = await streamRecorder.waitForSubscription();
+
+      expect(messages[1]).toMatchObject({
+        type: "frame",
+        data: "fallback snapshot\n",
+        generation: 1,
+        initial: true,
+        mode: "snapshot-fallback"
+      });
+
+      const upgradeMessagesPromise = collectWebSocketMessages(socket, 2);
+      subscription.emitMode({ mode: "stream" });
+      subscription.emitChunk({ kind: "stream", mode: "stream", seq: 9, data: "post-upgrade" });
+      const upgradeMessages = await upgradeMessagesPromise;
+
+      expect(upgradeMessages).toEqual([
+        {
+          type: "frame",
+          kind: "reset",
+          reason: "reconcile",
+          data: "upgrade reset snapshot\n",
+          cols: 80,
+          rows: 24,
+          generation: 2,
+          initial: true,
+          mode: "stream"
+        },
+        {
+          type: "frame",
+          kind: "stream",
+          data: "post-upgrade",
+          seq: 9,
+          mode: "stream"
+        }
+      ]);
+      expect(capture.calls).toEqual([
+        {
+          target: "%7",
+          socketPath: join(fixture.projectRoot, ".ccb", "ccbd", "tmux.sock"),
+          initial: true
+        },
+        {
+          target: "%7",
+          socketPath: join(fixture.projectRoot, ".ccb", "ccbd", "tmux.sock"),
+          initial: true
+        }
+      ]);
+      socket.terminate();
+    } finally {
+      await app.close();
+    }
+  });
+
   it("serves agent-terminal ready, frames, input, and per-write guard through the shared core", async () => {
     const fixture = createRouteFixture();
     const capture = buildCapture({ "%1": ["main claude frame\n"] });

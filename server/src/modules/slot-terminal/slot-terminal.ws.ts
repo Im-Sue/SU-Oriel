@@ -355,6 +355,7 @@ async function startSlotTerminalStreamMode(input: {
 }): Promise<SlotTerminalStreamSubscription | null> {
   let mode = "stream" as SlotTerminalStreamMode;
   let initialSnapshotSent = false;
+  let streamSeamStarted = false;
   let fallbackStarted = false;
   let generation = 0;
   let lastDimensions: SlotTerminalPaneDimensions | null = null;
@@ -382,6 +383,7 @@ async function startSlotTerminalStreamMode(input: {
       activeIntervalMs: input.activeIntervalMs,
       idleIntervalMs: input.idleIntervalMs,
       mode: "snapshot-fallback",
+      nextGeneration: () => ++generation,
       onError: (error) => {
         sendErrorAndClose(input.socket, "CAPTURE_FAILED", errorMessage(error), 1011);
       }
@@ -463,6 +465,50 @@ async function startSlotTerminalStreamMode(input: {
         ensureFallbackPumpStarted();
       });
   };
+  const startStreamSeam = (options: { resetReason?: "reconcile" } = {}) => {
+    if (streamSeamStarted) {
+      return;
+    }
+    streamSeamStarted = true;
+    streamQueue = streamQueue
+      .then(async () => {
+        if (input.isClosed() || mode !== "stream") {
+          return;
+        }
+        const frame = await captureStructuralFrame(true);
+        if (options.resetReason) {
+          sendFrame({
+            type: "frame",
+            kind: "reset",
+            reason: options.resetReason,
+            ...frame,
+            initial: true,
+            mode: "stream"
+          });
+        } else {
+          sendFrame({
+            type: "frame",
+            data: frame.data,
+            cols: frame.cols,
+            rows: frame.rows,
+            generation: frame.generation,
+            initial: true,
+            mode: "stream"
+          });
+        }
+        initialSnapshotSent = true;
+        const chunks = bufferedChunks;
+        bufferedChunks = [];
+        for (const chunk of chunks) {
+          enqueueStreamChunk(chunk);
+        }
+      })
+      .catch(() => {
+        mode = "snapshot-fallback";
+        streamSeamStarted = false;
+        ensureFallbackPumpStarted();
+      });
+  };
 
   streamSubscription = await input.streamRecorder.subscribe({
     target: input.subscription.target,
@@ -490,8 +536,12 @@ async function startSlotTerminalStreamMode(input: {
           }
           return;
         }
+        const wasFallbackStarted = fallbackStarted;
         fallbackStarted = false;
         input.setPump(null);
+        if (wasFallbackStarted && !initialSnapshotSent) {
+          startStreamSeam({ resetReason: "reconcile" });
+        }
       },
       onError: () => {
         mode = "snapshot-fallback";
@@ -518,21 +568,8 @@ async function startSlotTerminalStreamMode(input: {
     return streamSubscription;
   }
 
-  const initialFrame = await captureStructuralFrame(true);
-  initialSnapshotSent = true;
-  sendFrame({
-    type: "frame",
-    data: initialFrame.data,
-    cols: initialFrame.cols,
-    rows: initialFrame.rows,
-    generation: initialFrame.generation,
-    initial: true,
-    mode
-  });
-  for (const chunk of bufferedChunks) {
-    enqueueStreamChunk(chunk);
-  }
-  bufferedChunks = [];
+  startStreamSeam();
+  await streamQueue;
   return streamSubscription;
 }
 
@@ -543,6 +580,7 @@ function createSlotTerminalSnapshotPump(input: {
   activeIntervalMs: number;
   idleIntervalMs: number;
   mode?: SlotTerminalStreamMode;
+  nextGeneration?: () => number;
   onError: (error: unknown) => void;
 }): SlotTerminalFramePump {
   return new SlotTerminalFramePump({
@@ -557,7 +595,7 @@ function createSlotTerminalSnapshotPump(input: {
         data: frame.data,
         cols: frame.cols,
         rows: frame.rows,
-        generation: frame.generation,
+        generation: input.nextGeneration?.() ?? frame.generation,
         initial: frame.initial,
         ...(input.mode ? { mode: input.mode } : {})
       });
