@@ -1,7 +1,7 @@
 {
   "name": "su-oriel",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.1.0",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "dev:web": "pnpm --filter su-oriel-web dev",
