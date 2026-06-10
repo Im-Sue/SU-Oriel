@@ -75,7 +75,7 @@ export async function registerProjectRoutes(
       };
     }
 
-    const [documentCount, taskCount, requirementCount, failedParseJobs, failedDocuments] =
+    const [documentCount, taskCount, requirementCount, failedParseJobs, parseErrorCount, partialParseCount] =
       await Promise.all([
         prisma.document.count({
           where: {
@@ -105,9 +105,13 @@ export async function registerProjectRoutes(
         prisma.document.count({
           where: {
             projectId,
-            parseStatus: {
-              not: "success"
-            }
+            parseStatus: "parse_error"
+          }
+        }),
+        prisma.document.count({
+          where: {
+            projectId,
+            parseStatus: "partial"
           }
         })
       ]);
@@ -124,7 +128,8 @@ export async function registerProjectRoutes(
       documentCount,
       taskCount,
       requirementCount,
-      parseFailureCount: failedParseJobs + failedDocuments,
+      parseFailureCount: failedParseJobs + parseErrorCount,
+      partialParseCount,
       freshness
     };
   });

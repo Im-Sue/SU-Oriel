@@ -124,6 +124,7 @@ const indexHealth: ProjectIndexHealthView = {
   taskCount: 1,
   requirementCount: 1,
   parseFailureCount: 0,
+  partialParseCount: 0,
   freshness: true
 };
 

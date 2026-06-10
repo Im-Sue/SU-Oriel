@@ -92,6 +92,7 @@ const indexHealth: ProjectIndexHealthView = {
   taskCount: 1,
   requirementCount: 1,
   parseFailureCount: 0,
+  partialParseCount: 0,
   freshness: true
 };
 
@@ -420,6 +421,25 @@ describe("前端重构后的控制台骨架", () => {
 
     expect(await screen.findByText("项目不存在")).toBeInTheDocument();
     expect(screen.getByText(/missing-project/)).toBeInTheDocument();
+  });
+
+  it("概览系统健康区分解析失败与格式待规范化", async () => {
+    vi.mocked(consoleApi.fetchProjectIndexHealth).mockResolvedValue({
+      ...indexHealth,
+      parseFailureCount: 1,
+      partialParseCount: 2
+    });
+    window.history.pushState({}, "", scoped("/overview"));
+
+    render(<App />);
+
+    expect(await screen.findByText("系统健康")).toBeInTheDocument();
+    const parseFailureItem = screen.getByText("解析失败").closest("div");
+    const partialParseItem = screen.getByText("格式待规范化").closest("div");
+    expect(parseFailureItem).not.toBeNull();
+    expect(partialParseItem).not.toBeNull();
+    expect(within(parseFailureItem as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(partialParseItem as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
   it("旧任务、需求、文档链接会按 id 智能跳转到 scoped URL", async () => {

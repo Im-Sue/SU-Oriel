@@ -325,6 +325,7 @@ const indexHealth: ProjectIndexHealthView = {
   taskCount: tasks.length,
   requirementCount: requirements.length,
   parseFailureCount: 0,
+  partialParseCount: 0,
   freshness: true
 };
 
@@ -371,6 +372,7 @@ describe("E12 acceptance DOM baselines", () => {
     expect(screen.getByText("已交付")).toBeInTheDocument();
     expect(screen.getByText("任务与文档")).toBeInTheDocument();
     expect(screen.getByText("系统健康")).toBeInTheDocument();
+    expect(screen.getByText("格式待规范化")).toBeInTheDocument();
     expectMainSnapshot(container);
   });
 

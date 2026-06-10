@@ -80,6 +80,7 @@ export function OverviewPage() {
   }
 
   const parseFailureCount = indexHealth?.parseFailureCount ?? 0;
+  const partialParseCount = indexHealth?.partialParseCount ?? 0;
 
   return (
     <div className={styles.page}>
@@ -144,6 +145,10 @@ export function OverviewPage() {
           <div className={styles.compactItem}>
             <span className={styles.compactLabel}>解析失败</span>
             <strong className={styles.compactValue}>{parseFailureCount}</strong>
+          </div>
+          <div className={styles.compactItem}>
+            <span className={styles.compactLabel}>格式待规范化</span>
+            <strong className={styles.compactValue}>{partialParseCount}</strong>
           </div>
           <button className={styles.compactItem} onClick={() => navigate(toProjectPath("/runs"))} type="button">
             <span className={styles.compactLabel}>扫描失败</span>

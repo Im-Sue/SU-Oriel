@@ -590,6 +590,7 @@ async function testProjectDocumentTaskAndRequirementFlow(): Promise<void> {
   assert.equal(healthyIndexResponse.json().taskCount, 1);
   assert.equal(healthyIndexResponse.json().requirementCount, 0);
   assert.equal(healthyIndexResponse.json().parseFailureCount, 0);
+  assert.equal(healthyIndexResponse.json().partialParseCount, 0);
 
   const syncJobsResponse = await app.inject({
     method: "GET",
@@ -1577,6 +1578,59 @@ async function testConsoleTaskProjectionBugfixRegressions(): Promise<void> {
   await app.close();
 }
 
+async function testIndexHealthSeparatesParseErrorsFromPartialDocuments(): Promise<void> {
+  const app = buildApp({
+    projectStore: new PrismaProjectStore(prisma)
+  });
+
+  await resetDatabase();
+  const project = await prisma.project.create({
+    data: {
+      name: "Index Health Project",
+      localPath: join(tmpdir(), `ccb-index-health-${Date.now()}-${randomUUID()}`),
+      summary: "验证 parse_error 与 partial 健康度计数分离",
+      lastScanAt: new Date()
+    }
+  });
+
+  await prisma.document.createMany({
+    data: [
+      {
+        projectId: project.id,
+        path: "docs/parse-error.md",
+        kind: "other",
+        title: "Parse Error",
+        contentHash: "parse-error-hash",
+        mtime: new Date(),
+        parseStatus: "parse_error",
+        parseError: "frontmatter line 1: missing closing delimiter"
+      },
+      {
+        projectId: project.id,
+        path: "docs/partial.md",
+        kind: "other",
+        title: "Partial",
+        contentHash: "partial-hash",
+        mtime: new Date(),
+        parseStatus: "partial",
+        parseError: "frontmatter line 3: missing ':' separator"
+      }
+    ]
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: `/api/projects/${project.id}/index-health`
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().documentCount, 2);
+  assert.equal(response.json().parseFailureCount, 1);
+  assert.equal(response.json().partialParseCount, 1);
+
+  await app.close();
+}
+
 test("项目文档、任务与需求主链路保持可用", async () => {
   await testProjectDocumentTaskAndRequirementFlow();
 }, 10_000);
@@ -1619,6 +1673,10 @@ test("indexer 同时扫描 .ccb 和主 docs 且不从 decision 派生任务", as
 
 test("Console 任务投影修复覆盖 G1-G6 与 F7 forward-compat", async () => {
   await testConsoleTaskProjectionBugfixRegressions();
+});
+
+test("index-health separates parse_error failures from partial frontmatter warnings", async () => {
+  await testIndexHealthSeparatesParseErrorsFromPartialDocuments();
 });
 
 afterAll(async () => {

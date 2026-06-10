@@ -30,6 +30,7 @@ export interface ProjectIndexHealthView {
   taskCount: number;
   requirementCount: number;
   parseFailureCount: number;
+  partialParseCount: number;
   freshness: boolean;
 }
 

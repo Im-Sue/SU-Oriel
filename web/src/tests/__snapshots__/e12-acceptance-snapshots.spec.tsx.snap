@@ -804,6 +804,20 @@ exports[`E12 acceptance DOM baselines > captures overview page baseline 1`] = `
             0
           </strong>
         </div>
+        <div
+          class="_compactItem_e54c9b"
+        >
+          <span
+            class="_compactLabel_e54c9b"
+          >
+            格式待规范化
+          </span>
+          <strong
+            class="_compactValue_e54c9b"
+          >
+            0
+          </strong>
+        </div>
         <button
           class="_compactItem_e54c9b"
           type="button"
