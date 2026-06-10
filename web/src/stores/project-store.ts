@@ -5,6 +5,7 @@ import {
   createRequirement as createRequirementRequest,
   fetchDocuments,
   fetchProjectIndexHealth,
+  fetchProjectOnboardingStatus,
   fetchProjects,
   fetchRequirements,
   fetchSyncJobs,
@@ -12,13 +13,30 @@ import {
   scanProject as scanProjectRequest,
   updateTask as updateTaskRequest
 } from "../lib/console-api.js";
-import type { CreateProjectFormValue, ProjectIndexHealthView, ProjectView } from "../types/project.js";
+import type {
+  CreateProjectFormValue,
+  ProjectIndexHealthView,
+  ProjectOnboardingStatusView,
+  ProjectView
+} from "../types/project.js";
 import type { RequirementFormValue, RequirementView } from "../types/requirement.js";
 import type { SyncJobView } from "../types/sync-job.js";
 import type { TaskView, UpdateTaskInput } from "../types/task.js";
 import type { DocumentView } from "../types/document.js";
 
 const MISSING_PROJECT_MESSAGE = "项目不存在，请重新创建或选择项目";
+
+const ONBOARDING_TTL_MS = 30_000;
+
+export interface OnboardingEntry {
+  value: ProjectOnboardingStatusView | null;
+  fetchedAt: number;
+  loading: boolean;
+  error: string | null;
+}
+
+// 同一项目并发 ensureOnboarding 共享同一请求(in-flight 去重);Promise 不放进 store state(只存可序列化数据)。
+const onboardingInflight = new Map<string, Promise<ProjectOnboardingStatusView | null>>();
 
 interface ProjectStore {
   projects: ProjectView[];
@@ -28,6 +46,7 @@ interface ProjectStore {
   requirements: RequirementView[];
   syncJobs: SyncJobView[];
   indexHealth: ProjectIndexHealthView | null;
+  onboardingByProject: Record<string, OnboardingEntry>;
   loadingProjects: boolean;
   loadingData: boolean;
   savingTask: boolean;
@@ -39,6 +58,7 @@ interface ProjectStore {
   scanProject: () => Promise<void>;
   createRequirement: (input: RequirementFormValue) => Promise<RequirementView>;
   updateTask: (taskId: string, input: UpdateTaskInput) => Promise<TaskView>;
+  ensureOnboarding: (projectId: string, options?: { force?: boolean }) => Promise<ProjectOnboardingStatusView | null>;
 }
 
 function resolveSelectedProjectId(projects: ProjectView[], selectedProjectId: string | null): string | null {
@@ -66,6 +86,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => ({
   requirements: [],
   syncJobs: [],
   indexHealth: null,
+  onboardingByProject: {},
   loadingProjects: false,
   loadingData: false,
   savingTask: false,
@@ -165,5 +186,60 @@ export const useProjectStore = create<ProjectStore>()((set, get) => ({
     } finally {
       set({ savingTask: false });
     }
+  },
+  // onboarding 接入状态单一数据源:导航门控、概览引导、banner 共读同一份。
+  // loading / error / 未就绪一律由消费方按「未就绪」门控,不 fail-open。
+  ensureOnboarding: async (projectId, options = {}) => {
+    const { force = false } = options;
+    const existing = get().onboardingByProject[projectId];
+    if (!force && existing?.value && Date.now() - existing.fetchedAt <= ONBOARDING_TTL_MS) {
+      return existing.value;
+    }
+    const inflight = onboardingInflight.get(projectId);
+    if (inflight && !force) {
+      return await inflight;
+    }
+
+    const request = (async (): Promise<ProjectOnboardingStatusView | null> => {
+      set((state) => ({
+        onboardingByProject: {
+          ...state.onboardingByProject,
+          [projectId]: {
+            value: state.onboardingByProject[projectId]?.value ?? null,
+            fetchedAt: state.onboardingByProject[projectId]?.fetchedAt ?? 0,
+            loading: true,
+            error: null
+          }
+        }
+      }));
+      try {
+        const value = await fetchProjectOnboardingStatus(projectId);
+        set((state) => ({
+          onboardingByProject: {
+            ...state.onboardingByProject,
+            [projectId]: { value, fetchedAt: Date.now(), loading: false, error: null }
+          }
+        }));
+        return value;
+      } catch (error) {
+        set((state) => ({
+          onboardingByProject: {
+            ...state.onboardingByProject,
+            [projectId]: {
+              value: state.onboardingByProject[projectId]?.value ?? null,
+              fetchedAt: state.onboardingByProject[projectId]?.fetchedAt ?? 0,
+              loading: false,
+              error: error instanceof Error ? error.message : "加载项目接入状态失败"
+            }
+          }
+        }));
+        return null;
+      } finally {
+        onboardingInflight.delete(projectId);
+      }
+    })();
+
+    onboardingInflight.set(projectId, request);
+    return await request;
   }
 }));

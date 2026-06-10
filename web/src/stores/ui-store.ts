@@ -70,7 +70,9 @@ interface UIStore {
   slidePanelOpen: boolean;
   slidePanelContent: { type: "task"; taskId: string } | null;
   modalOpen: boolean;
-  modalType: "create-project" | "create-requirement" | "ai-cli-settings" | null;
+  modalType: "create-project" | "create-requirement" | "ai-cli-settings" | "onboarding-required" | null;
+  /** onboarding-required modal 触发时锚定的 projectId(CTA 跳该项目 /overview,避免弹框期间切项目跳错)。 */
+  onboardingRequiredProjectId: string | null;
   /** main 终端弹窗打开请求(请求-消费通道,独立于 modalOpen/modalType 互斥机制)。 */
   mainTerminalOpenRequest: { projectId: string } | null;
   toasts: ToastItem[];
@@ -81,6 +83,7 @@ interface UIStore {
   openTaskPanel: (taskId: string) => void;
   closeSlidePanel: () => void;
   openModal: (type: UIStore["modalType"]) => void;
+  openOnboardingRequired: (projectId: string) => void;
   closeModal: () => void;
   requestOpenMainTerminal: (projectId: string) => void;
   clearMainTerminalOpenRequest: () => void;
@@ -99,6 +102,7 @@ export const useUIStore = create<UIStore>()((set) => ({
   slidePanelContent: null,
   modalOpen: false,
   modalType: null,
+  onboardingRequiredProjectId: null,
   mainTerminalOpenRequest: null,
   toasts: [],
   anchorResetEpochs: {},
@@ -129,10 +133,18 @@ export const useUIStore = create<UIStore>()((set) => ({
       modalType: type
     });
   },
+  openOnboardingRequired: (projectId) => {
+    set({
+      modalOpen: true,
+      modalType: "onboarding-required",
+      onboardingRequiredProjectId: projectId
+    });
+  },
   closeModal: () => {
     set({
       modalOpen: false,
-      modalType: null
+      modalType: null,
+      onboardingRequiredProjectId: null
     });
   },
   requestOpenMainTerminal: (projectId) => {
