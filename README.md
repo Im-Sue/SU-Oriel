@@ -157,13 +157,15 @@ pnpm build
 ./scripts/dev-web.sh
 ```
 
-### 2. 安装 plugin / skills
+### 2. 安装底层 bridge
+
+安装 [claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge#readme)（提供 `ccb` / `ccbd`、slot 终端和 project ccbd），按其 README 执行 `./install.sh install`。bridge 前置依赖包括 Python 3.10+、`tmux`、Claude / Codex CLI。它是下面 plugin / skills 与整套 CCB 运行时的底座，需先装好。
+
+### 3. 安装 plugin / skills
 
 先按 [su-ccb-claude-plugin 安装说明](https://github.com/Im-Sue/su-ccb-claude-plugin#install) 完成系统级 Claude plugin 安装，并按 [su-ccb-codex-skills 安装说明](https://github.com/Im-Sue/su-ccb-codex-skills#install) 完成用户级 Codex skills 安装；两者都要先装好，再启动 CCB，这样 CCB 派生的 Claude / Codex agent 才会继承 plugin 与 skills。
 
-### 3. 安装底层 bridge
-
-安装 [claude_codex_bridge](https://github.com/SeemSeam/claude_codex_bridge#readme)（提供 `ccb` / `ccbd`、slot 终端和 project ccbd），按其 README 执行 `./install.sh install`。bridge 前置依赖包括 Python 3.10+、`tmux`、Claude / Codex CLI。
+> **可选增强（推荐）**：再装上 [SuperClaude](https://github.com/SuperClaude-Org/SuperClaude_Framework) 这个系统级 Claude 插件，CCB 的协商 / 审查会自动触发 `/sc:*` 深度分析；缺失不阻塞主流程。按其 README 在系统级 Claude 安装即可。
 
 ### 4. 接入每一个项目
 
