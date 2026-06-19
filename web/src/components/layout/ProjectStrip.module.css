@@ -1,7 +1,7 @@
 .strip {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: var(--cc-space-3);
   min-height: 48px;
   padding: var(--cc-space-2) var(--cc-space-4);
