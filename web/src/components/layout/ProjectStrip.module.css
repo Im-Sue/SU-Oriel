@@ -3,41 +3,45 @@
   align-items: center;
   justify-content: center;
   gap: var(--cc-space-3);
-  min-height: 48px;
+  min-height: 56px;
   padding: var(--cc-space-2) var(--cc-space-4);
-  background: var(--cc-color-bg-surface);
+  background: var(--cc-color-bg-base);
   border-bottom: 1px solid var(--cc-color-border-subtle);
 }
 
 .chips {
   display: flex;
   align-items: center;
-  gap: var(--cc-space-1);
+  gap: var(--cc-space-2);
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
+  padding: var(--cc-space-1) 0;
 }
 
+/* ---- project card chip ---- */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--cc-space-2);
-  height: 32px;
-  max-width: 200px;
+  height: 40px;
+  max-width: 220px;
   padding: 0 var(--cc-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border: 1px solid var(--cc-color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--cc-color-bg-surface);
+  box-shadow: var(--cc-shadow-sm);
   color: var(--cc-color-text-secondary);
   font-family: var(--cc-text-font-sans);
   font-size: var(--cc-text-size-sm);
   white-space: nowrap;
   cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
+  transition: box-shadow 150ms ease, border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
 
 .chip:hover {
-  background: var(--cc-color-bg-muted);
+  border-color: var(--cc-color-border-strong);
+  box-shadow: var(--cc-shadow-md);
   color: var(--cc-color-text-primary);
 }
 
@@ -47,9 +51,30 @@
 }
 
 .chip[data-selected="true"] {
+  border-color: var(--cc-color-accent-primary);
   background: var(--cc-color-green-50);
   color: var(--green-700);
+  box-shadow: var(--cc-shadow-md);
   font-weight: var(--cc-text-weight-semibold);
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--cc-color-bg-muted);
+  color: var(--cc-color-text-secondary);
+  font-size: var(--cc-text-size-xs);
+  font-weight: var(--cc-text-weight-semibold);
+  line-height: 1;
+}
+
+.chip[data-selected="true"] .avatar {
+  background: var(--cc-color-accent-primary);
+  color: var(--white);
 }
 
 .chipName {
@@ -59,8 +84,8 @@
 
 .dot {
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
 }
 
@@ -77,9 +102,10 @@
 }
 
 .skeleton {
-  width: 84px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  width: 120px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--cc-color-border-subtle);
   background: var(--cc-color-bg-muted);
   animation: projectStripPulse 1.4s ease-in-out infinite;
 }
@@ -100,26 +126,30 @@
   font-size: var(--cc-text-size-sm);
 }
 
+/* ---- overflow "more" ---- */
 .overflowWrap {
   position: relative;
   flex: none;
 }
 
 .moreButton {
-  height: 32px;
+  height: 40px;
   padding: 0 var(--cc-space-3);
   border: 1px solid var(--cc-color-border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--cc-color-bg-surface);
+  box-shadow: var(--cc-shadow-sm);
   color: var(--cc-color-text-secondary);
   font-family: var(--cc-text-font-sans);
   font-size: var(--cc-text-size-sm);
   white-space: nowrap;
   cursor: pointer;
+  transition: box-shadow 150ms ease, border-color 150ms ease;
 }
 
 .moreButton:hover {
-  background: var(--cc-color-bg-muted);
+  border-color: var(--cc-color-border-strong);
+  box-shadow: var(--cc-shadow-md);
 }
 
 .moreButton:focus-visible {
@@ -129,7 +159,7 @@
 
 .popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 30;
   display: grid;
@@ -215,27 +245,29 @@
   white-space: nowrap;
 }
 
+/* ---- tail create ---- */
 .createButton {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: var(--cc-space-1);
-  height: 32px;
-  padding: 0 var(--cc-space-3);
-  border: 1px solid var(--cc-color-border-subtle);
-  border-radius: var(--radius-sm);
+  height: 40px;
+  padding: 0 var(--cc-space-4);
+  border: 1px dashed var(--cc-color-border-strong);
+  border-radius: var(--radius-md);
   background: var(--cc-color-bg-surface);
   color: var(--cc-color-text-secondary);
   font-family: var(--cc-text-font-sans);
   font-size: var(--cc-text-size-sm);
   white-space: nowrap;
   cursor: pointer;
-  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .createButton:hover {
   border-color: var(--cc-color-accent-primary);
   color: var(--cc-color-accent-primary);
+  box-shadow: var(--cc-shadow-sm);
 }
 
 .createButton:focus-visible {
@@ -244,9 +276,11 @@
 }
 
 .createButton[data-emphasis="primary"] {
+  border-style: solid;
   border-color: var(--cc-color-accent-primary);
   background: var(--cc-color-accent-primary);
   color: var(--white);
+  box-shadow: var(--cc-shadow-sm);
 }
 
 .createButton[data-emphasis="primary"]:hover {

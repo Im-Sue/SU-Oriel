@@ -103,8 +103,9 @@ export function ProjectStrip(props: ProjectStripProps) {
                 title={project.localPath}
                 type="button"
               >
-                {tone ? <span aria-hidden="true" className={styles.dot} data-tone={tone} /> : null}
+                <span aria-hidden="true" className={styles.avatar}>{(project.name.trim()[0] ?? "?").toUpperCase()}</span>
                 <span className={styles.chipName}>{project.name}</span>
+                {tone ? <span aria-hidden="true" className={styles.dot} data-tone={tone} /> : null}
               </button>
             );
           })
