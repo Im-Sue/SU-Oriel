@@ -25,19 +25,74 @@ const FIELD_RULES: Array<Record<string, unknown>> = [
   {
     "name": "human_docs",
     "type": "object",
+    "required": [
+      "root",
+      "naming_default",
+      "entries",
+      "view_split"
+    ]
+  },
+  {
+    "name": "human_docs.entries",
+    "type": "array",
+    "item_required_any_of": [
+      [
+        "path",
+        "doc_type"
+      ],
+      [
+        "path",
+        "doc_types"
+      ]
+    ],
     "doc_type_format": "snake_case"
   },
   {
+    "name": "human_docs.view_split",
+    "type": "object",
+    "required": [
+      "reference_views",
+      "integrated_views"
+    ]
+  },
+  {
     "name": "machine_layer",
-    "type": "object"
+    "type": "object",
+    "required": [
+      "root",
+      "holds",
+      "not_holds"
+    ]
   },
   {
     "name": "entity_status",
-    "type": "object"
+    "type": "object",
+    "required": [
+      "requirement",
+      "task_subtask",
+      "adr"
+    ],
+    "each_value_required": [
+      "doc_types",
+      "kind",
+      "fields",
+      "values"
+    ]
   },
   {
     "name": "documents",
-    "type": "object"
+    "type": "object",
+    "required": [
+      "requirement_bound",
+      "evergreen",
+      "archive_index",
+      "health"
+    ],
+    "each_group_required": [
+      "doc_types",
+      "must_have",
+      "status"
+    ]
   }
 ];
 const BODY_RULE: null | { type?: string; required?: boolean; [key: string]: unknown } = null;
@@ -46,11 +101,87 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isMissing(value: unknown): boolean {
+  return value === undefined || value === null || value === "";
+}
+
 function issue(path: string, actual: unknown, expected: string): ValidationIssue {
   return { path, actual, expected };
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function stringGroups(value: unknown): string[][] {
+  return Array.isArray(value) ? value.filter(Array.isArray).map((group) => group.map(String)) : [];
+}
+
+function getPathValue(record: Record<string, unknown>, path: string): unknown {
+  let current: unknown = record;
+  for (const part of path.split(".")) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function conditionMatches(expression: unknown, record: Record<string, unknown>): boolean {
+  if (typeof expression !== "string") return false;
+  return expression.split(/\s+\|\|\s+/).some((rawClause) => {
+    const clause = rawClause.trim();
+    const existsMatch = clause.match(/^([A-Za-z0-9_.]+)\s+exists$/);
+    if (existsMatch) return getPathValue(record, existsMatch[1]) !== undefined;
+    const equalsMatch = clause.match(/^([A-Za-z0-9_.]+)\s*==\s*([A-Za-z0-9_.-]+)$/);
+    if (equalsMatch) return String(getPathValue(record, equalsMatch[1])) === equalsMatch[2];
+    return false;
+  });
+}
+
+function utf8ByteLength(value: unknown): number {
+  const text = JSON.stringify(value);
+  let bytes = 0;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint <= 0x7f) bytes += 1;
+    else if (codePoint <= 0x7ff) bytes += 2;
+    else if (codePoint <= 0xffff) bytes += 3;
+    else bytes += 4;
+  }
+  return bytes;
+}
+
+function valueDepth(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const children = Array.isArray(value) ? value : Object.values(value);
+  if (children.length === 0) return 1;
+  return 1 + Math.max(...children.map((child) => valueDepth(child)));
+}
+
+function hasBase64BusinessField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some((item) => hasBase64BusinessField(item));
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(([key, nested]) => key.endsWith("_b64") || hasBase64BusinessField(nested));
+}
+
+function validateDocTypeValue(value: unknown, path: string, issues: ValidationIssue[]): void {
+  const pattern = /^[a-z][a-z0-9_]*$/;
+  if (typeof value === "string") {
+    if (!pattern.test(value)) issues.push(issue(path, value, "snake_case doc_type"));
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      if (typeof item !== "string" || !pattern.test(item)) {
+        issues.push(issue(`${path}[${index}]`, item, "snake_case doc_type"));
+      }
+    }
+  }
+}
+
 function isStrictIso8601(value: unknown): boolean {
+  // Generated validators enforce the canonical writer form. Runtime validation
+  // may remain wider for legacy docs that predate the generated contract.
   if (typeof value !== "string") return false;
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
   const date = new Date(value);
@@ -132,6 +263,17 @@ function validateField(rule: Record<string, unknown>, value: unknown, issues: Va
       issues.push(issue(path, value, "object"));
       return;
     }
+    const maxBytes = typeof rule.max_bytes === "number" ? rule.max_bytes : null;
+    if (maxBytes !== null && utf8ByteLength(objectValue) > maxBytes) {
+      issues.push(issue(path, value, `object <= ${maxBytes} bytes`));
+    }
+    const maxDepth = typeof rule.max_depth === "number" ? rule.max_depth : null;
+    if (maxDepth !== null && valueDepth(objectValue) > maxDepth) {
+      issues.push(issue(path, value, `object depth <= ${maxDepth}`));
+    }
+    if ((maxBytes !== null || maxDepth !== null) && hasBase64BusinessField(objectValue)) {
+      issues.push(issue(path, value, "must not contain *_b64 business fields"));
+    }
     const allowedKeys = Array.isArray(rule.allowed_keys) ? rule.allowed_keys.map(String) : null;
     if (allowedKeys) {
       const allowed = new Set(allowedKeys);
@@ -139,10 +281,24 @@ function validateField(rule: Record<string, unknown>, value: unknown, issues: Va
         if (!allowed.has(key)) issues.push(issue(`${path}.${key}`, objectValue[key], `allowed key: ${allowedKeys.join(" | ")}`));
       }
     }
-    const requiredKeys = Array.isArray(rule.required_keys) ? rule.required_keys.map(String) : [];
+    const requiredKeys = Array.isArray(rule.required_keys) ? rule.required_keys.map(String) : stringArray(rule.required);
     for (const key of requiredKeys) {
-      if (objectValue[key] === undefined || objectValue[key] === null || objectValue[key] === "") {
+      if (isMissing(objectValue[key])) {
         issues.push(issue(`${path}.${key}`, objectValue[key], "required"));
+      }
+    }
+    for (const key of stringArray(rule.each_value_required)) {
+      for (const [nestedName, nestedValue] of Object.entries(objectValue)) {
+        if (isRecord(nestedValue) && isMissing(nestedValue[key])) {
+          issues.push(issue(`${path}.${nestedName}.${key}`, nestedValue[key], "required"));
+        }
+      }
+    }
+    for (const key of stringArray(rule.each_group_required)) {
+      for (const [nestedName, nestedValue] of Object.entries(objectValue)) {
+        if (isRecord(nestedValue) && isMissing(nestedValue[key])) {
+          issues.push(issue(`${path}.${nestedName}.${key}`, nestedValue[key], "required"));
+        }
       }
     }
     const nonEmptyStringKeys = Array.isArray(rule.non_empty_string_keys) ? rule.non_empty_string_keys.map(String) : [];
@@ -161,6 +317,25 @@ function validateField(rule: Record<string, unknown>, value: unknown, issues: Va
     if (type === "non_empty_array" && value.length === 0) issues.push(issue(path, value, "non-empty array"));
     if (type === "array_of_task_id" && value.some((item) => typeof item !== "string")) {
       issues.push(issue(path, value, "array of task ids"));
+    }
+    const itemRequiredGroups = stringGroups(rule.item_required_any_of);
+    const checkDocTypes = rule.doc_type_format === "snake_case";
+    for (const [index, item] of value.entries()) {
+      const itemPath = `${path}[${index}]`;
+      if (itemRequiredGroups.length > 0) {
+        if (!isRecord(item)) {
+          issues.push(issue(itemPath, item, "object"));
+          continue;
+        }
+        const hasAllowedGroup = itemRequiredGroups.some((group) => group.every((key) => !isMissing(item[key])));
+        if (!hasAllowedGroup) {
+          issues.push(issue(itemPath, item, `one of required key sets: ${itemRequiredGroups.map((group) => group.join(" + ")).join(" | ")}`));
+        }
+      }
+      if (checkDocTypes && isRecord(item)) {
+        validateDocTypeValue(item.doc_type, `${itemPath}.doc_type`, issues);
+        validateDocTypeValue(item.doc_types, `${itemPath}.doc_types`, issues);
+      }
     }
     return;
   }
@@ -208,7 +383,11 @@ export function validateDocsStructureContract(input: unknown): ValidationResult 
   }
   for (const rule of FIELD_RULES) {
     const fieldName = String(rule.name);
-    validateField(rule, frontmatter[fieldName], issues);
+    const value = getPathValue(frontmatter, fieldName);
+    if (conditionMatches(rule.required_when, frontmatter) && isMissing(value)) {
+      issues.push(issue(fieldName, value, `required when ${rule.required_when}`));
+    }
+    validateField(rule, value, issues);
   }
   if (BODY_RULE?.type === "markdown_min_50_chars_with_heading_or_list") {
     if (!hasUsefulMarkdown(body)) issues.push(issue("body", body, "markdown with >=50 chars and heading or list"));
