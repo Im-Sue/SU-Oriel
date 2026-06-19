@@ -48,21 +48,19 @@ describe("computeVisibleProjects", () => {
     expect(overflow).toHaveLength(0);
   });
 
-  it("keeps first N visible when current is already in head", () => {
+  it("moves current to the front even when it was already in the head", () => {
     const { visible, overflow } = computeVisibleProjects(many, "p2", 6);
-    expect(visible.map((p) => p.id)).toEqual(["p0", "p1", "p2", "p3", "p4", "p5"]);
+    expect(visible.map((p) => p.id)).toEqual(["p2", "p0", "p1", "p3", "p4", "p5"]);
     expect(overflow).toHaveLength(4);
   });
 
-  it("pins current to last visible slot when it falls in overflow, without duplication", () => {
+  it("pins current to the FIRST slot when it falls in overflow, without duplication", () => {
     const { visible, overflow } = computeVisibleProjects(many, "p8", 6);
-    expect(visible.map((p) => p.id)).toEqual(["p0", "p1", "p2", "p3", "p4", "p8"]);
+    expect(visible.map((p) => p.id)).toEqual(["p8", "p0", "p1", "p2", "p3", "p4"]);
     // no duplicate of current
     expect(visible.filter((p) => p.id === "p8")).toHaveLength(1);
-    // overflow count stays total - maxVisible (pin does not distort the "更多" count)
-    expect(overflow).toHaveLength(4);
-    expect(overflow.map((p) => p.id)).not.toContain("p8");
-    expect(overflow.map((p) => p.id)).toContain("p5");
+    // overflow count stays total - maxVisible; current is not in overflow
+    expect(overflow.map((p) => p.id)).toEqual(["p5", "p6", "p7", "p9"]);
   });
 
   it("falls back to head when there is no selection", () => {
