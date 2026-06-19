@@ -21,26 +21,34 @@ export interface VisibleProjectSplit {
 }
 
 /**
- * 计算顶部项目条的可见集合：**当前选中项目恒置顶**（排第一张卡），其余保持原序；
- * 超出 maxVisible 的进溢出。因为选中项永远在第一位，所以天然恒可见、不重复、不占溢出计数。
+ * 计算顶部项目条的可见集合：项目保持**原序**（不因选中而重排，靠卡片大小区分当前项）；
+ * 超出 maxVisible 进溢出。若当前选中项落在溢出区，则把它 pin 到可见区**末位**
+ *（前 maxVisible-1 个 + 当前项），保证选中项恒可见、不重复、不篡改溢出计数。
  */
 export function computeVisibleProjects(
   projects: ProjectView[],
   selectedProjectId: string | null,
   maxVisible: number
 ): VisibleProjectSplit {
-  let ordered = projects;
-  if (selectedProjectId != null) {
-    const index = projects.findIndex((project) => project.id === selectedProjectId);
-    if (index > 0) {
-      ordered = [projects[index], ...projects.slice(0, index), ...projects.slice(index + 1)];
-    }
+  if (maxVisible <= 0 || projects.length <= maxVisible) {
+    return { visible: projects, overflow: [] };
   }
 
-  if (maxVisible <= 0 || ordered.length <= maxVisible) {
-    return { visible: ordered, overflow: [] };
+  const head = projects.slice(0, maxVisible);
+  const currentInHead = selectedProjectId != null && head.some((project) => project.id === selectedProjectId);
+  if (selectedProjectId == null || currentInHead) {
+    return { visible: head, overflow: projects.slice(maxVisible) };
   }
-  return { visible: ordered.slice(0, maxVisible), overflow: ordered.slice(maxVisible) };
+
+  const current = projects.find((project) => project.id === selectedProjectId);
+  if (!current) {
+    return { visible: head, overflow: projects.slice(maxVisible) };
+  }
+
+  const visible = [...projects.slice(0, maxVisible - 1), current];
+  const visibleIds = new Set(visible.map((project) => project.id));
+  const overflow = projects.filter((project) => !visibleIds.has(project.id));
+  return { visible, overflow };
 }
 
 export type ProjectStatusTone = "error" | "busy" | "idle";
