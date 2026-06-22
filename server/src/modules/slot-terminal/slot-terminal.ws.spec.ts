@@ -154,19 +154,24 @@ function createRouteFixture(options: { projectRoot?: string; panes?: SlotTermina
 
 function buildCapture(
   framesByTarget: Record<string, string[]>,
-  dimensionsByTarget?: Record<string, Array<{ cols: number; rows: number }>>
+  dimensionsByTarget?: Record<string, Array<{ cols: number; rows: number }>>,
+  mouseStatesByTarget?: Record<string, Array<{ mouseAny: boolean; mouseSgr: boolean }>>
 ): SlotTerminalFrameCaptureBackend & {
   calls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
   dimensionCalls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
+  mouseStateCalls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
 } {
   const offsets = new Map<string, number>();
   const dimensionOffsets = new Map<string, number>();
+  const mouseStateOffsets = new Map<string, number>();
   const capture: SlotTerminalFrameCaptureBackend & {
     calls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
     dimensionCalls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
+    mouseStateCalls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
   } = {
     calls: [],
     dimensionCalls: [],
+    mouseStateCalls: [],
     async capturePane(input) {
       this.calls.push(input);
       const frames = framesByTarget[input.target] ?? [""];
@@ -182,6 +187,15 @@ function buildCapture(
       const offset = dimensionOffsets.get(input.target) ?? 0;
       dimensionOffsets.set(input.target, offset + 1);
       return dimensions[Math.min(offset, dimensions.length - 1)];
+    };
+  }
+  if (mouseStatesByTarget) {
+    capture.getPaneMouseState = async (input) => {
+      capture.mouseStateCalls.push(input);
+      const states = mouseStatesByTarget[input.target] ?? [{ mouseAny: false, mouseSgr: false }];
+      const offset = mouseStateOffsets.get(input.target) ?? 0;
+      mouseStateOffsets.set(input.target, offset + 1);
+      return states[Math.min(offset, states.length - 1)];
     };
   }
   return capture;
@@ -345,14 +359,18 @@ describe("slot-terminal frame pump", () => {
         cols: 5,
         rows: 1,
         generation: 1,
-        initial: true
+        initial: true,
+        mouseAny: false,
+        mouseSgr: false
       },
       {
         data: "second\n",
         cols: 6,
         rows: 1,
         generation: 2,
-        initial: false
+        initial: false,
+        mouseAny: false,
+        mouseSgr: false
       }
     ]);
     expect(capture.calls.map((call) => call.target)).toEqual(["%7", "%7", "%7"]);
@@ -437,13 +455,44 @@ describe("slot-terminal frame pump", () => {
         cols: 80,
         rows: 24,
         generation: 1,
-        initial: true
+        initial: true,
+        mouseAny: false,
+        mouseSgr: false
       }
     ]);
     expect(capture.getPaneDimensions).toHaveBeenCalledWith({
       target: "%7",
       socketPath: "/tmp/tmux.sock"
     });
+  });
+
+  it("emits a changed frame when only the pane mouse state changes", async () => {
+    vi.useFakeTimers();
+    const frames: SlotTerminalFrame[] = [];
+    const capture = buildCapture(
+      { "%7": ["same\n", "same\n"] },
+      undefined,
+      { "%7": [{ mouseAny: false, mouseSgr: false }, { mouseAny: true, mouseSgr: true }] }
+    );
+    const pump = new SlotTerminalFramePump({
+      capture,
+      target: "%7",
+      socketPath: "/tmp/tmux.sock",
+      activeIntervalMs: 150,
+      onFrame: (frame) => frames.push(frame),
+      onError: (error) => {
+        throw error;
+      }
+    });
+
+    await pump.start();
+    await vi.advanceTimersByTimeAsync(150);
+    pump.stop();
+
+    expect(frames.map((frame) => ({ data: frame.data, mouseAny: frame.mouseAny, mouseSgr: frame.mouseSgr }))).toEqual([
+      { data: "same\n", mouseAny: false, mouseSgr: false },
+      { data: "same\n", mouseAny: true, mouseSgr: true }
+    ]);
   });
 });
 
@@ -653,6 +702,8 @@ describe("slot-terminal websocket", () => {
         slotId: fixture.slotId,
         pane: "claude",
         target: "%7",
+        mouseAny: false,
+        mouseSgr: false,
         source: "slot-terminal",
         readonly: false,
         polling: {
@@ -667,7 +718,9 @@ describe("slot-terminal websocket", () => {
         cols: 12,
         rows: 1,
         generation: 1,
-        initial: true
+        initial: true,
+        mouseAny: false,
+        mouseSgr: false
       });
       expect(fixture.service.assertTargetBelongsTo).toHaveBeenCalledWith({
         requirementId: fixture.requirementId,
@@ -682,6 +735,35 @@ describe("slot-terminal websocket", () => {
           initial: true
         }
       ]);
+      socket.terminate();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("includes pane mouse flags on ready and snapshot frames", async () => {
+    const fixture = createRouteFixture();
+    const capture = buildCapture(
+      { "%7": ["claude frame\n"] },
+      undefined,
+      { "%7": [{ mouseAny: true, mouseSgr: true }, { mouseAny: true, mouseSgr: true }] }
+    );
+    const app = buildSlotTerminalWebSocketApp({
+      store: fixture.store,
+      service: fixture.service,
+      capture
+    });
+
+    try {
+      await app.ready();
+      const { socket, messages } = await collectInjectedMessages(
+        app,
+        `/api/slot-terminal/ws?projectId=${fixture.projectId}&requirementId=${fixture.requirementId}&pane=claude`,
+        2
+      );
+
+      expect(messages[0].descriptor).toMatchObject({ mouseAny: true, mouseSgr: true });
+      expect(messages[1]).toMatchObject({ type: "frame", mouseAny: true, mouseSgr: true });
       socket.terminate();
     } finally {
       await app.close();
@@ -796,8 +878,8 @@ describe("slot-terminal websocket", () => {
 
       expect(subscription.paused).toBe(false);
       expect(replay).toEqual([
-        { type: "frame", kind: "stream", data: "hidden-a", seq: 1, mode: "stream" },
-        { type: "frame", kind: "stream", data: "hidden-b", seq: 2, mode: "stream" }
+        { type: "frame", kind: "stream", data: "hidden-a", seq: 1, mode: "stream", mouseAny: false, mouseSgr: false },
+        { type: "frame", kind: "stream", data: "hidden-b", seq: 2, mode: "stream", mouseAny: false, mouseSgr: false }
       ]);
       socket.terminate();
     } finally {
@@ -1087,14 +1169,18 @@ describe("slot-terminal websocket", () => {
           rows: 24,
           generation: 2,
           initial: true,
-          mode: "stream"
+          mode: "stream",
+          mouseAny: false,
+          mouseSgr: false
         },
         {
           type: "frame",
           kind: "stream",
           data: "post-upgrade",
           seq: 9,
-          mode: "stream"
+          mode: "stream",
+          mouseAny: false,
+          mouseSgr: false
         }
       ]);
       expect(capture.calls).toEqual([
@@ -1153,6 +1239,8 @@ describe("slot-terminal websocket", () => {
         slotId: fixture.agentGroup,
         pane: "claude",
         target: "%1",
+        mouseAny: false,
+        mouseSgr: false,
         source: "slot-terminal",
         readonly: false,
         polling: {
@@ -1167,7 +1255,9 @@ describe("slot-terminal websocket", () => {
         cols: 17,
         rows: 1,
         generation: 1,
-        initial: true
+        initial: true,
+        mouseAny: false,
+        mouseSgr: false
       });
       expect(fixture.service.resolveAgentGroupTerminal).toHaveBeenCalledWith({
         projectId: fixture.projectId,
@@ -1965,6 +2055,26 @@ describe("slot-terminal websocket", () => {
     }
   });
 
+  it("tmux input writer keeps SGR wheel sequences in one literal send-keys command", async () => {
+    const execFileProcess = vi.fn(async () => ({ stdout: "", stderr: "" }));
+    const writer = new TmuxSlotTerminalInputWriter({ execFileProcess });
+    const data = "\u001b[<64;10;10M\u001b[<65;10;10M";
+
+    const result = await writer.sendInput({
+      target: "%7",
+      socketPath: "/repo/SU-CCB/.ccb/ccbd/tmux.sock",
+      data
+    });
+
+    expect(result).toEqual({
+      commandCount: 1,
+      bytes: Buffer.byteLength(data, "utf8")
+    });
+    expect(execFileProcess.mock.calls.map((call) => call[1])).toEqual([
+      ["-S", "/repo/SU-CCB/.ccb/ccbd/tmux.sock", "send-keys", "-t", "%7", "-l", "--", data]
+    ]);
+  });
+
   it("writes Chinese and control keys through websocket into a temporary tmux pane", async () => {
     const tempDir = await mkdtempSlotTerminal();
     const socketPath = join(tempDir, ".ccb", "ccbd", "tmux.sock");
@@ -2015,6 +2125,7 @@ describe("slot-terminal websocket", () => {
       socket.send(JSON.stringify({ type: "input", data: "\u007f" }));
       socket.send(JSON.stringify({ type: "input", data: "\r" }));
       socket.send(JSON.stringify({ type: "input", data: "\u001b[A\u001b[B\u001b[C\u001b[D" }));
+      socket.send(JSON.stringify({ type: "input", data: "\u001b[<64;10;10M" }));
       socket.send(JSON.stringify({ type: "input", data: "\u0003" }));
 
       const output = await waitForPaneText(socketPath, paneId, [
@@ -2029,6 +2140,7 @@ describe("slot-terminal websocket", () => {
         "KEY:<Down>",
         "KEY:<Right>",
         "KEY:<Left>",
+        "HEX:1b5b3c36343b31303b31304d",
         "KEY:<C-c>"
       ]);
 
@@ -2156,7 +2268,17 @@ async function waitForPaneText(socketPath: string, target: string, expected: str
   const deadline = Date.now() + 5_000;
   let last = "";
   while (Date.now() < deadline) {
-    const { stdout } = await execFileAsync("tmux", ["-S", socketPath, "capture-pane", "-p", "-e", "-t", target]);
+    const { stdout } = await execFileAsync("tmux", [
+      "-S",
+      socketPath,
+      "capture-pane",
+      "-S",
+      "-200",
+      "-p",
+      "-e",
+      "-t",
+      target
+    ]);
     last = String(stdout);
     if (expected.every((item) => last.includes(item))) {
       return last;
@@ -2178,6 +2300,7 @@ const known = [
   ["\\u001b[D", "<Left>"]
 ];
 process.stdin.on("data", (buffer) => {
+  console.log("HEX:" + buffer.toString("hex"));
   let text = buffer.toString("utf8");
   while (text.length > 0) {
     const match = known.find(([sequence]) => text.startsWith(sequence));

@@ -19,6 +19,8 @@ interface SlotTerminalReadyDescriptorBase {
   slotId: string;
   pane: SlotTerminalPaneRole;
   target: string;
+  mouseAny: boolean;
+  mouseSgr: boolean;
   source: "slot-terminal";
   readonly: false;
   polling: {
@@ -63,6 +65,8 @@ export interface SlotTerminalSnapshotFrame {
   rows: number;
   generation: number;
   initial: boolean;
+  mouseAny?: boolean;
+  mouseSgr?: boolean;
   mode?: SlotTerminalFrameMode;
 }
 
@@ -71,6 +75,8 @@ export interface SlotTerminalStreamFrame {
   kind: "stream";
   data: string;
   seq?: number;
+  mouseAny?: boolean;
+  mouseSgr?: boolean;
   mode?: SlotTerminalFrameMode;
 }
 
@@ -85,6 +91,8 @@ export interface SlotTerminalResetFrame {
   rows: number;
   generation: number;
   initial?: boolean;
+  mouseAny?: boolean;
+  mouseSgr?: boolean;
   mode?: SlotTerminalFrameMode;
 }
 
@@ -206,6 +214,8 @@ function parseReadyFrame(frame: Record<string, unknown>): SlotTerminalReadyFrame
     slotId: value.slotId,
     pane: value.pane,
     target: value.target,
+    mouseAny: value.mouseAny === true,
+    mouseSgr: value.mouseSgr === true,
     source: "slot-terminal" as const,
     readonly: false as const,
     polling: {
@@ -254,6 +264,8 @@ function parseSnapshotFrame(frame: Record<string, unknown>): SlotTerminalSnapsho
     rows: frame.rows,
     generation: frame.generation,
     initial: frame.initial,
+    mouseAny: frame.mouseAny === true,
+    mouseSgr: frame.mouseSgr === true,
     ...(frame.kind === "snapshot" ? { kind: "snapshot" as const } : {}),
     ...(isSlotTerminalFrameMode(frame.mode) ? { mode: frame.mode } : {})
   };
@@ -270,6 +282,8 @@ function parseStreamFrame(frame: Record<string, unknown>): SlotTerminalStreamFra
     type: "frame",
     kind: "stream",
     data: frame.data,
+    mouseAny: frame.mouseAny === true,
+    mouseSgr: frame.mouseSgr === true,
     ...(typeof frame.seq === "number" ? { seq: frame.seq } : {}),
     ...(isSlotTerminalFrameMode(frame.mode) ? { mode: frame.mode } : {})
   };
@@ -296,6 +310,8 @@ function parseResetFrame(frame: Record<string, unknown>): SlotTerminalResetFrame
     cols: frame.cols,
     rows: frame.rows,
     generation: frame.generation,
+    mouseAny: frame.mouseAny === true,
+    mouseSgr: frame.mouseSgr === true,
     ...(typeof frame.initial === "boolean" ? { initial: frame.initial } : {}),
     ...(isSlotTerminalFrameMode(frame.mode) ? { mode: frame.mode } : {})
   };

@@ -25,6 +25,7 @@ import {
   TmuxSlotTerminalFrameCapture,
   type SlotTerminalFrameCaptureBackend,
   type SlotTerminalPaneDimensions,
+  type SlotTerminalPaneMouseState,
   type SlotTerminalPollingHint,
   type SlotTerminalVisibility
 } from "./slot-terminal.frame-stream.js";
@@ -241,6 +242,10 @@ function handleSlotTerminalWebSocketConnection(input: {
       if (closed) {
         return;
       }
+      const mouseState = await resolvePaneMouseState(input.capture, {
+        target: resolvedSubscription.target,
+        socketPath: resolvedSubscription.socketPath
+      });
 
       sendJson(input.socket, {
         type: "ready",
@@ -248,7 +253,8 @@ function handleSlotTerminalWebSocketConnection(input: {
           target: input.target,
           subscription: resolvedSubscription,
           activeIntervalMs: input.activeIntervalMs,
-          idleIntervalMs: input.idleIntervalMs
+          idleIntervalMs: input.idleIntervalMs,
+          mouseState
         })
       });
       if (input.streamRecorder) {
@@ -405,12 +411,15 @@ async function startSlotTerminalStreamMode(input: {
   const captureStructuralFrame = async (initial: boolean) => {
     const data = await input.capture.capturePane({ ...targetInput, initial });
     const dimensions = (await input.capture.getPaneDimensions?.(targetInput)) ?? inferFrameDimensions(data);
+    const mouseState = await resolvePaneMouseState(input.capture, targetInput);
     lastDimensions = dimensions;
     return {
       data,
       cols: dimensions.cols,
       rows: dimensions.rows,
-      generation: ++generation
+      generation: ++generation,
+      mouseAny: mouseState.mouseAny,
+      mouseSgr: mouseState.mouseSgr
     };
   };
   const sendReset = async (reason: "resize" | "gap" | "error" | "reconcile") => {
@@ -526,12 +535,15 @@ async function startSlotTerminalStreamMode(input: {
         if (resized) {
           return;
         }
+        const mouseState = await resolvePaneMouseState(input.capture, targetInput);
         sendFrame({
           type: "frame",
           kind: "stream",
           data: chunk.data,
           seq: chunk.seq,
-          mode: "stream"
+          mode: "stream",
+          mouseAny: mouseState.mouseAny,
+          mouseSgr: mouseState.mouseSgr
         });
         clientHistory.append(chunk.data);
       })
@@ -684,6 +696,8 @@ function createSlotTerminalSnapshotPump(input: {
         rows: frame.rows,
         generation: input.nextGeneration?.() ?? frame.generation,
         initial: frame.initial,
+        mouseAny: frame.mouseAny,
+        mouseSgr: frame.mouseSgr,
         ...(input.mode ? { mode: input.mode } : {})
       });
     },
@@ -1000,11 +1014,14 @@ function buildReadyDescriptor(input: {
   subscription: SlotTerminalSubscription;
   activeIntervalMs: number;
   idleIntervalMs: number;
+  mouseState: SlotTerminalPaneMouseState;
 }): Record<string, unknown> {
   const base = {
     slotId: input.subscription.slotId,
     pane: input.subscription.role,
     target: input.subscription.target,
+    mouseAny: input.mouseState.mouseAny,
+    mouseSgr: input.mouseState.mouseSgr,
     source: "slot-terminal",
     readonly: false,
     polling: {
@@ -1027,6 +1044,13 @@ function buildReadyDescriptor(input: {
     group: input.target.group,
     ...base
   };
+}
+
+async function resolvePaneMouseState(
+  capture: SlotTerminalFrameCaptureBackend,
+  input: { target: string; socketPath?: string }
+): Promise<SlotTerminalPaneMouseState> {
+  return (await capture.getPaneMouseState?.(input)) ?? { mouseAny: false, mouseSgr: false };
 }
 
 function parseInputAction(frame: { data?: unknown }): SlotTerminalClientFrameAction {
