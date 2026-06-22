@@ -777,6 +777,7 @@ describe("slot-terminal websocket", () => {
     const initialCaptureGate = new Promise<void>((resolve) => {
       releaseInitialCapture = resolve;
     });
+    let mouseStateOffset = 0;
     const capture: SlotTerminalFrameCaptureBackend & {
       calls: Array<{ target: string; socketPath?: string; initial?: boolean }>;
     } = {
@@ -788,6 +789,16 @@ describe("slot-terminal websocket", () => {
       },
       async getPaneDimensions() {
         return { cols: 80, rows: 24 };
+      },
+      async getPaneMouseState() {
+        const states = [
+          { mouseAny: true, mouseSgr: true },
+          { mouseAny: true, mouseSgr: true },
+          { mouseAny: false, mouseSgr: false }
+        ];
+        const state = states[Math.min(mouseStateOffset, states.length - 1)];
+        mouseStateOffset += 1;
+        return state;
       }
     };
     const app = buildSlotTerminalWebSocketApp({
@@ -827,6 +838,8 @@ describe("slot-terminal websocket", () => {
         rows: 24,
         generation: 1,
         initial: true,
+        mouseAny: true,
+        mouseSgr: true,
         mode: "stream"
       });
       expect(messages[2]).toEqual(slotTerminalProtocolFixtureFrames.streamChunkA);

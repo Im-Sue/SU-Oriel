@@ -581,6 +581,8 @@ async function startSlotTerminalStreamMode(input: {
             rows: frame.rows,
             generation: frame.generation,
             initial: true,
+            mouseAny: frame.mouseAny,
+            mouseSgr: frame.mouseSgr,
             mode: "stream"
           });
         }

@@ -69,6 +69,23 @@ describe("SlotTerminalWheel", () => {
     expect(terminal.scrollLines).not.toHaveBeenCalled();
   });
 
+  it("forwards down-wheel events with SGR button 65", async () => {
+    vi.useFakeTimers();
+    const sendInput = vi.fn();
+
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: 24, clientX: 55, clientY: 45 }), {
+      host: createHost(),
+      terminal: createTerminal(),
+      mouseState: { mouseAny: true, mouseSgr: true },
+      forwardState: createSlotTerminalWheelForwardState(),
+      sendInput,
+      scheduler: timerScheduler()
+    });
+    await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_WHEEL_FLUSH_MS);
+
+    expect(sendInput).toHaveBeenCalledWith("\u001b[<65;5;2M");
+  });
+
   it("uses Shift wheel as the local-scroll escape hatch even when mouse is on", () => {
     const host = createHost();
     host.scrollTop = 0;
@@ -116,6 +133,55 @@ describe("SlotTerminalWheel", () => {
     await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_WHEEL_FLUSH_MS);
 
     expect(sendInput).toHaveBeenCalledWith("\u001b[<64;1;1M");
+  });
+
+  it("flushes pending wheel input before merging a different cell", async () => {
+    vi.useFakeTimers();
+    const host = createHost();
+    const sendInput = vi.fn();
+    const input = {
+      host,
+      terminal: createTerminal(),
+      mouseState: { mouseAny: true, mouseSgr: true },
+      forwardState: createSlotTerminalWheelForwardState(),
+      sendInput,
+      scheduler: timerScheduler()
+    };
+
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: -24, clientX: 55, clientY: 45 }), input);
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: -24, clientX: 155, clientY: 45 }), input);
+
+    expect(sendInput).toHaveBeenCalledTimes(1);
+    expect(sendInput).toHaveBeenLastCalledWith("\u001b[<64;5;2M");
+    await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_WHEEL_FLUSH_MS);
+
+    expect(sendInput).toHaveBeenCalledTimes(2);
+    expect(sendInput).toHaveBeenLastCalledWith("\u001b[<64;15;2M");
+  });
+
+  it("clears sub-line accumulation when wheel direction changes", async () => {
+    vi.useFakeTimers();
+    const host = createHost();
+    const sendInput = vi.fn();
+    const input = {
+      host,
+      terminal: createTerminal(),
+      mouseState: { mouseAny: true, mouseSgr: true },
+      forwardState: createSlotTerminalWheelForwardState(),
+      sendInput,
+      scheduler: timerScheduler()
+    };
+
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: -12, clientX: 55, clientY: 45 }), input);
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: 12, clientX: 55, clientY: 45 }), input);
+    await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_WHEEL_FLUSH_MS);
+    expect(sendInput).not.toHaveBeenCalled();
+
+    handleSlotTerminalWheel(createWheelEvent({ deltaY: 8, clientX: 55, clientY: 45 }), input);
+    await vi.advanceTimersByTimeAsync(SLOT_TERMINAL_WHEEL_FLUSH_MS);
+
+    expect(sendInput).toHaveBeenCalledTimes(1);
+    expect(sendInput).toHaveBeenCalledWith("\u001b[<65;5;2M");
   });
 });
 
