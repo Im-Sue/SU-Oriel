@@ -122,6 +122,8 @@ const readyDescriptor: SlotTerminalReadyDescriptor = {
   slotId: "slot-2",
   pane: "claude",
   target: "%7",
+  mouseAny: true,
+  mouseSgr: true,
   source: "slot-terminal",
   readonly: false,
   polling: {
@@ -137,6 +139,8 @@ const agentGroupReadyDescriptor: SlotTerminalReadyDescriptor = {
   slotId: "main",
   pane: "codex",
   target: "%2",
+  mouseAny: false,
+  mouseSgr: false,
   source: "slot-terminal",
   readonly: false,
   polling: {

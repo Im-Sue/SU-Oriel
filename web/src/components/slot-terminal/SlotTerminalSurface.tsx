@@ -3,6 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createSlotTerminalClient, type SlotTerminalClient, type SlotTerminalWebSocketFactory } from "../../lib/slot-terminal-ws.js";
 import type { SlotTerminalPaneRole, SlotTerminalReadyDescriptor, SlotTerminalTarget } from "../../types/slot-terminal.js";
 import { SlotTerminalFrameRenderer } from "./SlotTerminalFrameRenderer.js";
+import {
+  cancelSlotTerminalWheelForward,
+  createSlotTerminalWheelForwardState,
+  handleSlotTerminalWheel,
+  type SlotTerminalPaneMouseState,
+  type SlotTerminalWheelForwardState
+} from "./SlotTerminalWheel.js";
 import { useXtermTerminal } from "./useXtermTerminal.js";
 import styles from "./SlotTerminalSurface.module.css";
 
@@ -49,6 +56,8 @@ export function TerminalSurface(props: TerminalSurfaceProps) {
   const target = props.target;
   const clientRef = useRef<SlotTerminalClient | null>(null);
   const rendererRef = useRef<SlotTerminalFrameRenderer | null>(null);
+  const mouseStateRef = useRef<SlotTerminalPaneMouseState>({ mouseAny: false, mouseSgr: false });
+  const wheelForwardStateRef = useRef<SlotTerminalWheelForwardState>(createSlotTerminalWheelForwardState());
   const [status, setStatus] = useState<"connecting" | "open" | "closed" | "error">("connecting");
   const [lastError, setLastError] = useState<string | null>(null);
   const [historyLimited, setHistoryLimited] = useState(false);
@@ -93,8 +102,12 @@ export function TerminalSurface(props: TerminalSurfaceProps) {
       webSocketFactory: props.webSocketFactory,
       callbacks: {
         onStatusChange: setStatus,
-        onReady: (descriptor) => props.onReady?.(descriptor),
+        onReady: (descriptor) => {
+          mouseStateRef.current = mouseStateFromFrame(descriptor);
+          props.onReady?.(descriptor);
+        },
         onFrame: (frame) => {
+          mouseStateRef.current = mouseStateFromFrame(frame);
           if (frame.mode === "snapshot-fallback") {
             setHistoryLimited(true);
           } else if (frame.mode === "stream") {
@@ -171,46 +184,32 @@ export function TerminalSurface(props: TerminalSurfaceProps) {
     return () => host.removeEventListener("paste", onPaste, true);
   }, [containerRef, terminal]);
 
-  // 滚轮仲裁（Opt-1a'·capture-phase）：纵向只保留一根可见 host 条。
-  // host 滚"当前屏溢出"，到边界后把滚轮交给 xterm scrollback 看历史 → "单条 + 历史可达"。
-  // ⚠ 需浏览器实测调参（trackpad delta / 快速滚动）；只读镜像不向 pane 转发 wheel，故不涉 mouse-tracking。
+  // 滚轮仲裁（capture-phase）：mouse-on pane 转发 wheel，其余保留旧本地滚动。
   useEffect(() => {
     const host = containerRef.current;
     if (!host || !terminal) {
       return;
     }
     const onWheel = (event: WheelEvent) => {
-      const dy = event.deltaY;
-      if (dy === 0) {
-        return;
-      }
-      const atHostTop = host.scrollTop <= 0;
-      const atHostBottom = host.scrollTop + host.clientHeight >= host.scrollHeight - 1;
-      const active = terminal.buffer?.active;
-      const historyAtBottom = !active || active.viewportY >= active.baseY;
-      const lines = Math.max(1, Math.round(Math.abs(dy) / 16));
-      if (dy < 0) {
-        // 上滚：host 还能上滚 → 滚 host 看当前屏上半；host 到顶 → 进 xterm 历史
-        if (!atHostTop) {
-          host.scrollTop += dy;
-        } else {
-          terminal.scrollLines(-lines);
+      handleSlotTerminalWheel(event, {
+        host,
+        terminal,
+        mouseState: mouseStateRef.current,
+        forwardState: wheelForwardStateRef.current,
+        sendInput: (data) => clientRef.current?.sendInput(data),
+        scheduler: {
+          setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+          clearTimeout: (handle) => window.clearTimeout(handle as number)
         }
-      } else {
-        // 下滚：历史未回到 live → 先把 xterm 拉回底；回到 live 后让 host 滚到当前屏底
-        if (!historyAtBottom) {
-          terminal.scrollLines(lines);
-        } else if (!atHostBottom) {
-          host.scrollTop += dy;
-        } else {
-          return; // 已在最底，交回默认
-        }
-      }
-      event.preventDefault();
-      event.stopPropagation();
+      });
     };
     host.addEventListener("wheel", onWheel, { capture: true, passive: false });
-    return () => host.removeEventListener("wheel", onWheel, { capture: true } as EventListenerOptions);
+    return () => {
+      host.removeEventListener("wheel", onWheel, { capture: true } as EventListenerOptions);
+      cancelSlotTerminalWheelForward(wheelForwardStateRef.current, {
+        clearTimeout: (handle) => window.clearTimeout(handle as number)
+      });
+    };
   }, [terminal]);
 
   // 右键菜单：点击别处 / 滚动 / Esc 关闭。
@@ -311,4 +310,11 @@ function slotTerminalTargetKey(target: SlotTerminalTarget): string {
   return target.kind === "requirement"
     ? `${target.kind}:${target.projectId}:${target.requirementId}`
     : `${target.kind}:${target.projectId}:${target.group}`;
+}
+
+function mouseStateFromFrame(input: { mouseAny?: boolean; mouseSgr?: boolean }): SlotTerminalPaneMouseState {
+  return {
+    mouseAny: input.mouseAny === true,
+    mouseSgr: input.mouseSgr === true
+  };
 }

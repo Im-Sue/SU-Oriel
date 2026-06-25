@@ -8,6 +8,8 @@ export const slotTerminalProtocolFixtureFrames = {
     rows: 24,
     generation: 1,
     initial: true,
+    mouseAny: false,
+    mouseSgr: false,
     mode: "snapshot-fallback"
   },
   explicitSnapshot: {
@@ -18,6 +20,8 @@ export const slotTerminalProtocolFixtureFrames = {
     rows: 24,
     generation: 2,
     initial: false,
+    mouseAny: false,
+    mouseSgr: false,
     mode: "snapshot-fallback"
   },
   streamChunkA: {
@@ -25,6 +29,8 @@ export const slotTerminalProtocolFixtureFrames = {
     kind: "stream",
     data: "stream-a",
     seq: 101,
+    mouseAny: false,
+    mouseSgr: false,
     mode: "stream"
   },
   streamChunkB: {
@@ -32,6 +38,8 @@ export const slotTerminalProtocolFixtureFrames = {
     kind: "stream",
     data: "\r\nstream-b",
     seq: 102,
+    mouseAny: false,
+    mouseSgr: false,
     mode: "stream"
   },
   reset: {
@@ -42,6 +50,8 @@ export const slotTerminalProtocolFixtureFrames = {
     cols: 100,
     rows: 30,
     generation: 3,
+    mouseAny: false,
+    mouseSgr: false,
     mode: "stream"
   }
 } as const satisfies Record<string, SlotTerminalFrame>;

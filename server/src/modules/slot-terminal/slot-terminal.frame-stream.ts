@@ -20,6 +20,8 @@ export type SlotTerminalFrame = {
   rows: number;
   generation: number;
   initial: boolean;
+  mouseAny: boolean;
+  mouseSgr: boolean;
 };
 
 export type SlotTerminalCaptureInput = {
@@ -33,6 +35,11 @@ export type SlotTerminalPaneDimensions = {
   rows: number;
 };
 
+export type SlotTerminalPaneMouseState = {
+  mouseAny: boolean;
+  mouseSgr: boolean;
+};
+
 export type SlotTerminalExecFileProcess = (
   command: string,
   args: string[]
@@ -41,6 +48,7 @@ export type SlotTerminalExecFileProcess = (
 export interface SlotTerminalFrameCaptureBackend {
   capturePane(input: SlotTerminalCaptureInput): Promise<string>;
   getPaneDimensions?(input: SlotTerminalCaptureInput): Promise<SlotTerminalPaneDimensions>;
+  getPaneMouseState?(input: SlotTerminalCaptureInput): Promise<SlotTerminalPaneMouseState>;
 }
 
 export class TmuxSlotTerminalFrameCapture implements SlotTerminalFrameCaptureBackend {
@@ -93,6 +101,19 @@ export class TmuxSlotTerminalFrameCapture implements SlotTerminalFrameCaptureBac
     const dimensions = parsePaneDimensions(String(stdout));
     this.dimensionsCache.set(cacheKey, { dimensions, checkedAt: Date.now() });
     return dimensions;
+  }
+
+  async getPaneMouseState(input: SlotTerminalCaptureInput): Promise<SlotTerminalPaneMouseState> {
+    const args = [
+      ...(input.socketPath ? ["-S", input.socketPath] : []),
+      "display-message",
+      "-p",
+      "-t",
+      input.target,
+      "#{mouse_any_flag} #{mouse_sgr_flag}"
+    ];
+    const { stdout } = await this.execFileProcess(this.tmuxCommand, args);
+    return parsePaneMouseState(String(stdout));
   }
 }
 
@@ -188,10 +209,11 @@ export class SlotTerminalFramePump {
       const captureInput = { ...paneInput, initial: this.generation === 0 };
       const data = await this.capture.capturePane(captureInput);
       const dimensions = await this.resolveDimensions(paneInput, data);
+      const mouseState = await this.resolveMouseState(paneInput);
       if (this.isPaused()) {
         return;
       }
-      const frameKey = `${dimensions.cols}x${dimensions.rows}\u0000${data}`;
+      const frameKey = `${dimensions.cols}x${dimensions.rows}:${mouseState.mouseAny ? 1 : 0}${mouseState.mouseSgr ? 1 : 0}\u0000${data}`;
       if (forceEmit || frameKey !== this.lastFrameKey) {
         this.lastFrameKey = frameKey;
         this.onFrame({
@@ -199,7 +221,9 @@ export class SlotTerminalFramePump {
           cols: dimensions.cols,
           rows: dimensions.rows,
           generation: ++this.generation,
-          initial: this.generation === 1
+          initial: this.generation === 1,
+          mouseAny: mouseState.mouseAny,
+          mouseSgr: mouseState.mouseSgr
         });
       }
     } catch (error) {
@@ -242,6 +266,10 @@ export class SlotTerminalFramePump {
   private async resolveDimensions(input: SlotTerminalCaptureInput, data: string): Promise<SlotTerminalPaneDimensions> {
     return (await this.capture.getPaneDimensions?.(input)) ?? inferFrameDimensions(data);
   }
+
+  private async resolveMouseState(input: SlotTerminalCaptureInput): Promise<SlotTerminalPaneMouseState> {
+    return (await this.capture.getPaneMouseState?.(input)) ?? { mouseAny: false, mouseSgr: false };
+  }
 }
 
 export function inferFrameDimensions(data: string): { cols: number; rows: number } {
@@ -274,4 +302,12 @@ function parsePaneDimensions(value: string): SlotTerminalPaneDimensions {
     throw new Error(`invalid tmux pane dimensions: ${value.trim()}`);
   }
   return { cols, rows };
+}
+
+function parsePaneMouseState(value: string): SlotTerminalPaneMouseState {
+  const [anyRaw = "", sgrRaw = ""] = value.trim().split(/\s+/);
+  return {
+    mouseAny: anyRaw === "1",
+    mouseSgr: sgrRaw === "1"
+  };
 }
